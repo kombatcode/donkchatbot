@@ -4,7 +4,16 @@ import os
 import json
 
 app = Flask(__name__)
-bot = telebot.TeleBot(os.environ.get('8329471417:AAHczHnEAOZT8eu82qqYq5Pa84nV_TLS0Ok'))
+
+# Получаем токен бота
+BOT_TOKEN = os.environ.get('8329471417:AAHczHnEAOZT8eu82qqYq5Pa84nV_TLS0Ok')
+
+# Если токен есть - создаем бота, иначе None
+if BOT_TOKEN:
+    bot = telebot.TeleBot(BOT_TOKEN)
+else:
+    bot = None
+    print("⚠️  BOT_TOKEN not set - running in demo mode")
 
 # HTML для MiniApp
 MINI_APP_HTML = """
@@ -177,7 +186,6 @@ MINI_APP_HTML = """
 
         // Загрузка текущих настроек
         function loadSettings() {
-            // В реальном приложении здесь должен быть запрос к серверу
             const defaultSettings = {
                 send_messages: true,
                 send_media: true,
@@ -237,7 +245,10 @@ MINI_APP_HTML = """
 
 @app.route('/')
 def index():
-    return "Telegram MiniApp Server is running! Visit /group_settings.html for the MiniApp"
+    if BOT_TOKEN:
+        return "✅ Telegram MiniApp Server is running! BOT_TOKEN is set."
+    else:
+        return "⚠️ Telegram MiniApp Server is running in demo mode. Set BOT_TOKEN environment variable."
 
 @app.route('/group_settings.html')
 def group_settings():
@@ -245,6 +256,9 @@ def group_settings():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
+    if not BOT_TOKEN:
+        return 'Bot token not set', 400
+        
     if request.headers.get('content-type') == 'application/json':
         json_string = request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_string)
@@ -252,63 +266,72 @@ def webhook():
         return ''
     return 'Error', 403
 
-@bot.message_handler(commands=['start', 'settings'])
-def handle_settings(message):
-    from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-    
-    markup = InlineKeyboardMarkup()
-    web_app_button = InlineKeyboardButton(
-        "⚙️ Open Group Settings", 
-        web_app=telebot.types.WebAppInfo(url="https://donkchatbot.onrender.com/group_settings.html")
-    )
-    markup.add(web_app_button)
-    
-    bot.send_message(
-        message.chat.id,
-        "🎛️ Welcome to Group Settings Manager!\n\nClick the button below to manage group permissions:",
-        reply_markup=markup
-    )
-
-@bot.message_handler(content_types=['web_app_data'])
-def handle_web_app_data(message):
-    try:
-        data = json.loads(message.web_app_data.data)
+# Обработчики бота только если токен установлен
+if BOT_TOKEN:
+    @bot.message_handler(commands=['start', 'settings'])
+    def handle_settings(message):
+        from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
         
-        if data.get('action') == 'update_group_settings':
-            settings = data.get('settings', {})
+        markup = InlineKeyboardMarkup()
+        web_app_button = InlineKeyboardButton(
+            "⚙️ Open Group Settings", 
+            web_app=telebot.types.WebAppInfo(url="https://donkchatbot.onrender.com/group_settings.html")
+        )
+        markup.add(web_app_button)
+        
+        bot.send_message(
+            message.chat.id,
+            "🎛️ Welcome to Group Settings Manager!\n\nClick the button below to manage group permissions:",
+            reply_markup=markup
+        )
+
+    @bot.message_handler(content_types=['web_app_data'])
+    def handle_web_app_data(message):
+        try:
+            data = json.loads(message.web_app_data.data)
             
-            # Форматируем настройки для красивого вывода
-            settings_text = "📋 Updated Group Settings:\n\n"
-            for setting, value in settings.items():
-                setting_name = setting.replace('_', ' ').title()
-                status = "✅ Enabled" if value else "❌ Disabled"
-                settings_text += f"• {setting_name}: {status}\n"
-            
+            if data.get('action') == 'update_group_settings':
+                settings = data.get('settings', {})
+                
+                # Форматируем настройки для красивого вывода
+                settings_text = "📋 Updated Group Settings:\n\n"
+                for setting, value in settings.items():
+                    setting_name = setting.replace('_', ' ').title()
+                    status = "✅ Enabled" if value else "❌ Disabled"
+                    settings_text += f"• {setting_name}: {status}\n"
+                
+                bot.send_message(
+                    message.chat.id,
+                    f"{settings_text}\n⚡ Changes applied successfully!",
+                    parse_mode='HTML'
+                )
+                
+        except Exception as e:
             bot.send_message(
                 message.chat.id,
-                f"{settings_text}\n⚡ Changes applied successfully!",
-                parse_mode='HTML'
+                f"❌ Error updating settings: {str(e)}"
             )
-            
-    except Exception as e:
-        bot.send_message(
-            message.chat.id,
-            f"❌ Error updating settings: {str(e)}"
-        )
 
-# Обработчик для любых текстовых сообщений
-@bot.message_handler(func=lambda message: True)
-def handle_all_messages(message):
-    if message.text and not message.text.startswith('/'):
-        bot.send_message(
-            message.chat.id,
-            "🤖 Hello! Use /settings to manage group permissions via MiniApp"
-        )
+    # Обработчик для любых текстовых сообщений
+    @bot.message_handler(func=lambda message: True)
+    def handle_all_messages(message):
+        if message.text and not message.text.startswith('/'):
+            bot.send_message(
+                message.chat.id,
+                "🤖 Hello! Use /settings to manage group permissions via MiniApp"
+            )
 
 if __name__ == '__main__':
-    # Настройка вебхука для Render
-    bot.remove_webhook()
-    bot.set_webhook(url="https://donkchatbot.onrender.com/webhook")
+    # Настройка вебхука только если токен установлен
+    if BOT_TOKEN:
+        try:
+            bot.remove_webhook()
+            bot.set_webhook(url="https://donkchatbot.onrender.com/webhook")
+            print("✅ Webhook set successfully")
+        except Exception as e:
+            print(f"⚠️ Webhook setup failed: {e}")
+    else:
+        print("⚠️ Running without bot token - webhook not set")
     
     # Запуск приложения
     port = int(os.environ.get('PORT', 5000))
