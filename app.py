@@ -6,7 +6,7 @@ import json
 app = Flask(__name__)
 
 # Получаем токен бота
-BOT_TOKEN = os.environ.get('8329471417:AAHczHnEAOZT8eu82qqYq5Pa84nV_TLS0Ok')
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
 # Если токен есть - создаем бота, иначе None
 if BOT_TOKEN:
