@@ -8,6 +8,9 @@ app = Flask(__name__)
 # Получаем токен бота
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
+# ID разрешенного пользователя
+ALLOWED_USER_ID = 1444832263
+
 # Если токен есть - создаем бота, иначе None
 if BOT_TOKEN:
     bot = telebot.TeleBot(BOT_TOKEN)
@@ -104,88 +107,179 @@ MINI_APP_HTML = """
             background: #f44336;
             color: white;
         }
+        .access-denied {
+            text-align: center;
+            padding: 40px 20px;
+            color: #ff4444;
+        }
+        .demo-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>⚙️ Group Settings</h2>
+        <div id="access-denied" class="access-denied" style="display: none;">
+            <h2>🚫 Access Denied</h2>
+            <p>This MiniApp can only be used through Telegram.</p>
+            <p><small>User ID: <span id="user-id">unknown</span></small></p>
+        </div>
         
-        <div class="setting">
-            <div class="setting-title">
-                Send Messages
-                <label class="switch">
-                    <input type="checkbox" id="send_messages" onchange="updateSetting('send_messages', this.checked)">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <p>Allow members to send messages</p>
+        <div id="demo-warning" class="demo-warning" style="display: none;">
+            <h3>⚠️ Demo Mode</h3>
+            <p>This is a preview. To use full functionality, open this MiniApp through Telegram bot.</p>
         </div>
-
-        <div class="setting">
-            <div class="setting-title">
-                Send Media
-                <label class="switch">
-                    <input type="checkbox" id="send_media" onchange="updateSetting('send_media', this.checked)">
-                    <span class="slider"></span>
-                </label>
+        
+        <div id="app-content">
+            <h2>⚙️ Group Settings</h2>
+            <p><small>Connected as User ID: <span id="current-user-id">loading...</span></small></p>
+            
+            <div class="setting">
+                <div class="setting-title">
+                    Send Messages
+                    <label class="switch">
+                        <input type="checkbox" id="send_messages" onchange="updateSetting('send_messages', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <p>Allow members to send messages</p>
             </div>
-            <p>Allow members to send media files</p>
-        </div>
 
-        <div class="setting">
-            <div class="setting-title">
-                Send Polls
-                <label class="switch">
-                    <input type="checkbox" id="send_polls" onchange="updateSetting('send_polls', this.checked)">
-                    <span class="slider"></span>
-                </label>
+            <div class="setting">
+                <div class="setting-title">
+                    Send Media
+                    <label class="switch">
+                        <input type="checkbox" id="send_media" onchange="updateSetting('send_media', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <p>Allow members to send media files</p>
             </div>
-            <p>Allow members to send polls</p>
-        </div>
 
-        <div class="setting">
-            <div class="setting-title">
-                Change Info
-                <label class="switch">
-                    <input type="checkbox" id="change_info" onchange="updateSetting('change_info', this.checked)">
-                    <span class="slider"></span>
-                </label>
+            <div class="setting">
+                <div class="setting-title">
+                    Send Polls
+                    <label class="switch">
+                        <input type="checkbox" id="send_polls" onchange="updateSetting('send_polls', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <p>Allow members to send polls</p>
             </div>
-            <p>Allow members to change group info</p>
-        </div>
 
-        <div class="setting">
-            <div class="setting-title">
-                Invite Users
-                <label class="switch">
-                    <input type="checkbox" id="invite_users" onchange="updateSetting('invite_users', this.checked)">
-                    <span class="slider"></span>
-                </label>
+            <div class="setting">
+                <div class="setting-title">
+                    Change Info
+                    <label class="switch">
+                        <input type="checkbox" id="change_info" onchange="updateSetting('change_info', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <p>Allow members to change group info</p>
             </div>
-            <p>Allow members to invite users</p>
-        </div>
 
-        <div class="setting">
-            <div class="setting-title">
-                Pin Messages
-                <label class="switch">
-                    <input type="checkbox" id="pin_messages" onchange="updateSetting('pin_messages', this.checked)">
-                    <span class="slider"></span>
-                </label>
+            <div class="setting">
+                <div class="setting-title">
+                    Invite Users
+                    <label class="switch">
+                        <input type="checkbox" id="invite_users" onchange="updateSetting('invite_users', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <p>Allow members to invite users</p>
             </div>
-            <p>Allow members to pin messages</p>
-        </div>
 
-        <div id="status" class="status"></div>
+            <div class="setting">
+                <div class="setting-title">
+                    Pin Messages
+                    <label class="switch">
+                        <input type="checkbox" id="pin_messages" onchange="updateSetting('pin_messages', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <p>Allow members to pin messages</p>
+            </div>
+
+            <div id="status" class="status"></div>
+        </div>
     </div>
 
     <script>
         let tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
+        let isTelegram = false;
+        let currentUserId = null;
+
+        // Проверка среды выполнения
+        function checkEnvironment() {
+            // Проверяем, запущено ли в Telegram WebApp
+            if (typeof tg !== 'undefined' && tg.initDataUnsafe) {
+                isTelegram = true;
+                tg.expand();
+                tg.ready();
+                
+                const user = tg.initDataUnsafe.user;
+                if (user) {
+                    currentUserId = user.id;
+                    document.getElementById('current-user-id').textContent = currentUserId;
+                    return checkAccess();
+                }
+            }
+            
+            // Если не в Telegram, показываем демо-режим
+            showDemoMode();
+            return false;
+        }
+
+        // Проверка доступа
+        function checkAccess() {
+            if (!isTelegram) {
+                showDemoMode();
+                return false;
+            }
+            
+            const user = tg.initDataUnsafe.user;
+            if (!user) {
+                showAccessDenied('No user data available');
+                return false;
+            }
+            
+            const allowedUserId = 1444832263;
+            if (user.id !== allowedUserId) {
+                showAccessDenied('User ID not authorized');
+                return false;
+            }
+            
+            return true;
+        }
+
+        function showAccessDenied(reason) {
+            document.getElementById('access-denied').style.display = 'block';
+            document.getElementById('app-content').style.display = 'none';
+            document.getElementById('user-id').textContent = currentUserId || 'unknown';
+            console.log('Access denied:', reason);
+        }
+
+        function showDemoMode() {
+            document.getElementById('demo-warning').style.display = 'block';
+            document.getElementById('current-user-id').textContent = 'not in Telegram';
+            
+            // В демо-режиме блокируем функциональность
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.disabled = true;
+            });
+        }
 
         // Загрузка текущих настроек
         function loadSettings() {
+            if (!checkEnvironment()) return;
+            
             const defaultSettings = {
                 send_messages: true,
                 send_media: true,
@@ -206,6 +300,11 @@ MINI_APP_HTML = """
 
         // Обновление настроек
         function updateSetting(setting, value) {
+            if (!checkAccess()) {
+                showStatus('Access denied - open via Telegram bot', 'error');
+                return;
+            }
+            
             const settings = {
                 send_messages: document.getElementById('send_messages').checked,
                 send_media: document.getElementById('send_media').checked,
@@ -215,13 +314,20 @@ MINI_APP_HTML = """
                 pin_messages: document.getElementById('pin_messages').checked
             };
             
-            // Отправка данных боту
-            tg.sendData(JSON.stringify({
-                action: 'update_group_settings',
-                settings: settings
-            }));
-            
-            showStatus('Setting updated!', 'success');
+            try {
+                // Отправка данных боту
+                tg.sendData(JSON.stringify({
+                    action: 'update_group_settings',
+                    settings: settings,
+                    user_id: currentUserId,
+                    timestamp: Date.now()
+                }));
+                
+                showStatus('Settings updated successfully!', 'success');
+            } catch (error) {
+                showStatus('Error sending data to bot', 'error');
+                console.error('Send data error:', error);
+            }
         }
 
         // Показать статус
@@ -233,7 +339,7 @@ MINI_APP_HTML = """
             
             setTimeout(() => {
                 status.style.display = 'none';
-            }, 2000);
+            }, 3000);
         }
 
         // Загружаем настройки при запуске
@@ -266,10 +372,24 @@ def webhook():
         return ''
     return 'Error', 403
 
+# Функция проверки доступа
+def check_user_access(user_id):
+    """Проверяет, имеет ли пользователь доступ к боту"""
+    return user_id == ALLOWED_USER_ID
+
 # Обработчики бота только если токен установлен
 if BOT_TOKEN:
     @bot.message_handler(commands=['start', 'settings'])
     def handle_settings(message):
+        # Проверяем доступ пользователя
+        if not check_user_access(message.from_user.id):
+            bot.send_message(
+                message.chat.id,
+                "🚫 Access Denied\n\nYou don't have permission to use this bot.",
+                parse_mode='HTML'
+            )
+            return
+        
         from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
         
         markup = InlineKeyboardMarkup()
@@ -287,9 +407,36 @@ if BOT_TOKEN:
 
     @bot.message_handler(content_types=['web_app_data'])
     def handle_web_app_data(message):
+        # Проверяем доступ пользователя
+        if not check_user_access(message.from_user.id):
+            bot.send_message(
+                message.chat.id,
+                "🚫 Access Denied\n\nYou don't have permission to use this bot.",
+                parse_mode='HTML'
+            )
+            return
+            
         try:
             data = json.loads(message.web_app_data.data)
             
+            # Дополнительная проверка источника данных
+            if not message.web_app_data:
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Invalid request source",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Проверяем наличие необходимых полей
+            if not data.get('user_id') or data.get('user_id') != message.from_user.id:
+                bot.send_message(
+                    message.chat.id,
+                    "❌ User ID mismatch",
+                    parse_mode='HTML'
+                )
+                return
+                
             if data.get('action') == 'update_group_settings':
                 settings = data.get('settings', {})
                 
@@ -300,9 +447,14 @@ if BOT_TOKEN:
                     status = "✅ Enabled" if value else "❌ Disabled"
                     settings_text += f"• {setting_name}: {status}\n"
                 
+                # Добавляем информацию о пользователе
+                user_info = f"\n👤 User ID: {message.from_user.id}"
+                if message.from_user.username:
+                    user_info += f" (@{message.from_user.username})"
+                
                 bot.send_message(
                     message.chat.id,
-                    f"{settings_text}\n⚡ Changes applied successfully!",
+                    f"{settings_text}{user_info}\n\n⚡ Changes applied successfully!",
                     parse_mode='HTML'
                 )
                 
@@ -315,6 +467,15 @@ if BOT_TOKEN:
     # Обработчик для любых текстовых сообщений
     @bot.message_handler(func=lambda message: True)
     def handle_all_messages(message):
+        # Проверяем доступ пользователя
+        if not check_user_access(message.from_user.id):
+            bot.send_message(
+                message.chat.id,
+                "🚫 Access Denied\n\nYou don't have permission to use this bot.",
+                parse_mode='HTML'
+            )
+            return
+            
         if message.text and not message.text.startswith('/'):
             bot.send_message(
                 message.chat.id,
@@ -328,6 +489,7 @@ if __name__ == '__main__':
             bot.remove_webhook()
             bot.set_webhook(url="https://donkchatbot.onrender.com/webhook")
             print("✅ Webhook set successfully")
+            print(f"✅ Bot configured for user ID: {ALLOWED_USER_ID}")
         except Exception as e:
             print(f"⚠️ Webhook setup failed: {e}")
     else:
