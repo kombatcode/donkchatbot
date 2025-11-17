@@ -131,7 +131,6 @@ def home():
     <head>
         <title>Donk Chat Settings</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <style>
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -174,18 +173,12 @@ def home():
                 text-decoration: none;
                 display: inline-block;
                 margin: 10px 0;
+                width: 100%;
             }
             .btn:hover {
                 background: #3a56e8;
                 transform: translateY(-2px);
                 box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            }
-            .error {
-                background: rgba(255, 59, 48, 0.1);
-                border: 1px solid #ff3b30;
-                padding: 15px;
-                border-radius: 10px;
-                margin-bottom: 20px;
             }
             .auth-section {
                 margin: 25px 0;
@@ -200,26 +193,35 @@ def home():
                 margin-bottom: 15px;
                 opacity: 0.7;
             }
+            .user-id-info {
+                background: rgba(255,255,255,0.1);
+                padding: 10px;
+                border-radius: 8px;
+                margin: 15px 0;
+                font-size: 14px;
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <h1>🎛️ Donk Chat Settings</h1>
-            <p>Для доступа к настройкам группы необходимо авторизоваться через Telegram</p>
+            <p>Для доступа к настройкам группы необходимо авторизоваться</p>
             
+            <div class="user-id-info">
+                Разрешённые ID: 1444832263, 848736128
+            </div>
+
             <div class="auth-section">
-                <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                        data-telegram-login="k0mbvt1ktestbot" 
-                        data-size="large" 
-                        data-auth-url="/auth" 
-                        data-request-access="write"></script>
+                <a href="https://t.me/k0mbvt1ktestbot?start=web_auth" class="btn">
+                    🔐 Авторизоваться через Telegram
+                </a>
             </div>
 
             <div class="manual-auth">
-                <p>Если кнопка выше не работает:</p>
-                <a href="https://t.me/k0mbvt1ktestbot?start=auth" class="btn">
-                    🔐 Авторизоваться в боте
-                </a>
+                <p>Или отправьте боту команду:</p>
+                <div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 8px; font-family: monospace;">
+                    /start
+                </div>
             </div>
             
             <p style="margin-top: 20px; font-size: 14px; opacity: 0.7;">
@@ -233,26 +235,34 @@ def home():
 @app.route('/auth')
 def auth():
     """Обработчик авторизации Telegram"""
+    print(f"🔐 Auth request: {request.args}")
     auth_data = dict(request.args)
     verified_data = verify_telegram_authorization(auth_data.copy())
     
     if verified_data:
         user_id = int(verified_data.get('id'))
+        username = verified_data.get('username', '')
+        first_name = verified_data.get('first_name', '')
+        
+        print(f"✅ Telegram auth successful: user_id={user_id}, username={username}, first_name={first_name}")
+        
         session['user_id'] = user_id
-        session['username'] = verified_data.get('username')
-        session['first_name'] = verified_data.get('first_name')
+        session['username'] = username
+        session['first_name'] = first_name
         
         if user_id in ALLOWED_USER_IDS:
+            print(f"🎉 Access granted for user {user_id}")
             return redirect('/settings')
         else:
-            return """
+            print(f"🚫 Access denied for user {user_id} - not in allowed list")
+            return f"""
             <!DOCTYPE html>
             <html>
             <head>
                 <title>Access Denied</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <style>
-                    body {
+                    body {{
                         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                         display: flex;
                         justify-content: center;
@@ -262,26 +272,32 @@ def auth():
                         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                         color: white;
                         text-align: center;
-                    }
-                    .container {
+                    }}
+                    .container {{
                         background: rgba(255,255,255,0.1);
                         padding: 40px;
                         border-radius: 20px;
                         backdrop-filter: blur(10px);
                         max-width: 400px;
                         width: 90%;
-                    }
-                    h1 {
+                    }}
+                    h1 {{
                         font-size: 24px;
                         margin-bottom: 20px;
                         color: #ff6b6b;
-                    }
-                    p {
+                    }}
+                    p {{
                         opacity: 0.8;
                         margin-bottom: 20px;
                         line-height: 1.5;
-                    }
-                    .btn {
+                    }}
+                    .user-info {{
+                        background: rgba(255,255,255,0.1);
+                        padding: 15px;
+                        border-radius: 10px;
+                        margin: 20px 0;
+                    }}
+                    .btn {{
                         background: #4f6df5;
                         color: white;
                         border: none;
@@ -293,16 +309,17 @@ def auth():
                         transition: all 0.3s;
                         text-decoration: none;
                         display: inline-block;
-                    }
-                    .btn:hover {
-                        background: #3a56e8;
-                        transform: translateY(-2px);
-                    }
+                    }}
                 </style>
             </head>
             <body>
                 <div class="container">
                     <h1>🚫 Доступ запрещен</h1>
+                    <div class="user-info">
+                        Ваш ID: {user_id}<br>
+                        Username: @{username}<br>
+                        Имя: {first_name}
+                    </div>
                     <p>У вас нет прав для управления настройками этой группы.</p>
                     <p>Доступ разрешен только для администраторов.</p>
                     <a href="/" class="btn">Вернуться на главную</a>
@@ -310,8 +327,15 @@ def auth():
             </body>
             </html>
             """
+    else:
+        print("❌ Telegram auth verification failed")
     
     return redirect('/')
+
+@app.route('/bot_auth')
+def bot_auth():
+    """Перенаправление для авторизации через бота"""
+    return redirect('https://t.me/k0mbvt1ktestbot?start=web_auth')
 
 @app.route('/logout')
 def logout():
@@ -1208,13 +1232,13 @@ def bot_webhook():
             if 'text' in message:
                 text = message['text']
                 
-                if text == '/start' or text == '/settings':
+                if text == '/start' or text == '/settings' or text.startswith('/start web_auth'):
                     webapp_url = "https://donkchatbot.onrender.com/settings"
                     
                     # Отправляем сообщение с кнопкой для открытия мини-приложения
                     telegram_api('sendMessage', {
                         'chat_id': chat_id,
-                        'text': '🎛️ *Donk Chat Settings*\n\nУправление настройками группы',
+                        'text': f'🎛️ *Donk Chat Settings*\n\nВаш ID: `{user_id}`\nУправление настройками группы',
                         'parse_mode': 'Markdown',
                         'reply_markup': {
                             'inline_keyboard': [[
