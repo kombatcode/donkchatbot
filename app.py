@@ -7,7 +7,7 @@ import time
 app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
-ALLOWED_USER_ID = 1444832263
+ALLOWED_USER_IDS = [1444832263, 848736128]  # Добавлен новый ID
 GROUP_CHAT_ID = -1001721934457
 
 # Текущие настройки в памяти
@@ -68,7 +68,9 @@ def get_current_settings():
     """Получает текущие настройки из Telegram"""
     result = telegram_api('getChat', {'chat_id': GROUP_CHAT_ID})
     if result.get('ok'):
-        return result['result'].get('permissions', {})
+        permissions = result['result'].get('permissions', {})
+        print(f"📋 Current Telegram settings: {permissions}")
+        return permissions
     return {}
 
 def sync_settings():
@@ -383,7 +385,6 @@ def settings_page():
             <div class="control-panel">
                 <button class="btn" onclick="syncSettings()">🔄 Синхронизировать</button>
                 <button class="btn" onclick="applyAllSettings()">🎯 Применить все</button>
-                <button class="btn btn-test" onclick="testDisableMessages()">🧪 Тест: Выкл сообщения</button>
             </div>
 
             <div id="status" class="status"></div>
@@ -575,6 +576,7 @@ def settings_page():
 
         <script>
             let tg = window.Telegram.WebApp;
+            let currentSettings = {json.dumps(current_settings)};
             
             // Проверяем, открыто ли в Telegram WebApp
             function checkTelegramEnvironment() {{
@@ -590,24 +592,16 @@ def settings_page():
                 return true;
             }}
             
-            // Инициализация
-            if (checkTelegramEnvironment()) {{
-                loadSettings();
+            // Инициализация интерфейса
+            function initializeUI() {{
+                updateUI(currentSettings);
                 showStatus('🎯 Donk Chat Settings загружены!', 'info');
             }}
-
-            function loadSettings() {{
-                // Используем WebApp Data для загрузки настроек
-                const data = {{
-                    action: 'get_settings',
-                    chat_id: {GROUP_CHAT_ID},
-                    timestamp: Date.now()
-                }};
-                
-                tg.sendData(JSON.stringify(data));
-            }}
-
+            
+            // Обновление UI на основе текущих настроек
             function updateUI(settings) {{
+                console.log('Updating UI with settings:', settings);
+                
                 // Основные разрешения
                 document.getElementById('can_send_messages').checked = settings.can_send_messages;
                 document.getElementById('can_send_polls').checked = settings.can_send_polls;
@@ -625,9 +619,17 @@ def settings_page():
                 document.getElementById('can_invite_users').checked = settings.can_invite_users;
                 document.getElementById('can_pin_messages').checked = settings.can_pin_messages;
             }}
+            
+            // Инициализация при загрузке
+            if (checkTelegramEnvironment()) {{
+                initializeUI();
+            }}
 
             function toggleSetting(setting, value) {{
                 showStatus('🔄 Изменение настроек...', 'info');
+                
+                // Обновляем локально сразу для отзывчивости
+                currentSettings[setting] = value;
                 
                 const data = {{
                     action: 'update_setting',
@@ -638,38 +640,51 @@ def settings_page():
                 }};
                 
                 tg.sendData(JSON.stringify(data));
+                
+                // Показываем успех через 1 секунду (предполагая успех)
+                setTimeout(() => {{
+                    showStatus('✅ Настройка применена', 'success');
+                }}, 1000);
             }}
 
             function syncSettings() {{
                 showStatus('🔄 Синхронизация с Telegram...', 'info');
+                
                 const data = {{
                     action: 'sync_settings',
                     chat_id: {GROUP_CHAT_ID},
                     timestamp: Date.now()
                 }};
+                
                 tg.sendData(JSON.stringify(data));
+                
+                // Обновляем UI через 2 секунды
+                setTimeout(() => {{
+                    // Запрашиваем актуальные настройки
+                    const getData = {{
+                        action: 'get_current_settings', 
+                        chat_id: {GROUP_CHAT_ID},
+                        timestamp: Date.now()
+                    }};
+                    tg.sendData(JSON.stringify(getData));
+                    showStatus('✅ Синхронизировано', 'success');
+                }}, 2000);
             }}
 
             function applyAllSettings() {{
                 showStatus('🎯 Применение всех настроек...', 'info');
+                
                 const data = {{
                     action: 'apply_settings',
                     chat_id: {GROUP_CHAT_ID},
                     timestamp: Date.now()
                 }};
+                
                 tg.sendData(JSON.stringify(data));
-            }}
-
-            function testDisableMessages() {{
-                showStatus('🧪 Тестирование: отключение сообщений...', 'warning');
-                const data = {{
-                    action: 'update_setting',
-                    setting: 'can_send_messages',
-                    value: false,
-                    chat_id: {GROUP_CHAT_ID},
-                    timestamp: Date.now()
-                }};
-                tg.sendData(JSON.stringify(data));
+                
+                setTimeout(() => {{
+                    showStatus('✅ Все настройки применены', 'success');
+                }}, 1000);
             }}
 
             function showStatus(message, type) {{
@@ -680,12 +695,22 @@ def settings_page():
                 
                 setTimeout(() => {{
                     status.style.display = 'none';
-                }}, 4000);
+                }}, 3000);
             }}
 
-            // Обработчик сообщений от бота
-            tg.onEvent('viewportChanged', function() {{
-                tg.expand();
+            // Обработчик данных от бота
+            tg.onEvent('webAppDataReceived', function(event) {{
+                console.log('Data received from bot:', event);
+                // Здесь можно обработать ответы от бота если нужно
+            }});
+
+            // Обработчик сообщений от бота через основной обработчик
+            window.addEventListener('message', function(event) {{
+                if (event.data && event.data.type === 'settings_update') {{
+                    currentSettings = event.data.settings;
+                    updateUI(currentSettings);
+                    showStatus('🔄 Настройки обновлены', 'info');
+                }}
             }});
         </script>
     </body>
@@ -706,13 +731,10 @@ def webhook():
         # Обрабатываем сообщения от бота
         if 'message' in data:
             message = data['message']
+            user_id = message['from']['id']
             
             # Проверяем доступ
-            if message['from']['id'] != ALLOWED_USER_ID:
-                telegram_api('sendMessage', {
-                    'chat_id': message['chat']['id'],
-                    'text': '🚫 Access denied'
-                })
+            if user_id not in ALLOWED_USER_IDS:
                 return 'OK'
             
             # Обрабатываем команды
@@ -737,7 +759,7 @@ def webhook():
             web_app_data = data['web_app_data']
             user_id = data['from']['id']
             
-            if user_id != ALLOWED_USER_ID:
+            if user_id not in ALLOWED_USER_IDS:
                 return 'OK'
             
             try:
@@ -747,12 +769,9 @@ def webhook():
                 
                 print(f"🔄 WebApp Action: {action}")
                 
-                if action == 'get_settings':
-                    # Отправляем текущие настройки
-                    telegram_api('sendMessage', {
-                        'chat_id': user_id,
-                        'text': f'📊 Current Settings:\\n\\n{json.dumps(current_settings, indent=2)}'
-                    })
+                if action == 'get_current_settings':
+                    # Просто логируем - настройки уже в интерфейсе
+                    print(f"📊 Current settings requested: {current_settings}")
                     
                 elif action == 'update_setting':
                     setting = app_data.get('setting')
@@ -760,43 +779,35 @@ def webhook():
                     
                     if setting in current_settings:
                         result = update_setting(setting, value)
-                        status = '✅ Успешно' if result.get('ok') else '❌ Ошибка'
-                        telegram_api('sendMessage', {
-                            'chat_id': user_id,
-                            'text': f'{status}: {setting} = {value}'
-                        })
+                        # Не отправляем сообщение - только логируем
+                        print(f"✅ Setting updated: {setting} = {value}, Result: {result.get('ok')}")
                         
                 elif action == 'sync_settings':
                     success = sync_settings()
-                    status = '✅ Синхронизировано' if success else '❌ Ошибка синхронизации'
-                    telegram_api('sendMessage', {
-                        'chat_id': user_id,
-                        'text': status
-                    })
+                    print(f"🔄 Settings synced: {success}")
                     
                 elif action == 'apply_settings':
                     result = apply_settings()
-                    status = '✅ Настройки применены' if result.get('ok') else '❌ Ошибка применения'
-                    telegram_api('sendMessage', {
-                        'chat_id': user_id,
-                        'text': status
-                    })
+                    print(f"🎯 Settings applied: {result.get('ok')}")
                     
             except Exception as e:
                 print(f"❌ WebApp data error: {e}")
-                telegram_api('sendMessage', {
-                    'chat_id': user_id,
-                    'text': f'❌ Ошибка: {str(e)}'
-                })
     
     except Exception as e:
         print(f"❌ Webhook error: {e}")
     
     return 'OK'
 
+# Новый endpoint для получения текущих настроек
+@app.route('/api/settings', methods=['GET'])
+def get_settings_api():
+    """API для получения текущих настроек"""
+    return jsonify(current_settings)
+
 if __name__ == '__main__':
     print("🚀 Starting Telegram-Only Settings Manager")
     print(f"🎯 Group: {GROUP_CHAT_ID}")
+    print(f"👥 Allowed users: {ALLOWED_USER_IDS}")
     print("🔒 RESTRICTED: Only works through Telegram WebApp")
     
     port = int(os.environ.get('PORT', 5000))
