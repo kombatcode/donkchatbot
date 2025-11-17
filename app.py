@@ -1,9 +1,13 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session, redirect, url_for
 import requests
 import os
 import json
+import hashlib
+import hmac
+import time
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-here')
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 ALLOWED_USER_IDS = [1444832263, 848736128]
@@ -88,21 +92,49 @@ def sync_settings():
         return True
     return False
 
+def verify_telegram_authorization(auth_data):
+    """Проверяет авторизацию Telegram"""
+    try:
+        check_hash = auth_data.pop('hash')
+        data_check_string = '\n'.join([f"{k}={v}" for k, v in sorted(auth_data.items())])
+        
+        secret_key = hashlib.sha256(BOT_TOKEN.encode()).digest()
+        computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        
+        if computed_hash != check_hash:
+            return False
+            
+        # Проверяем время авторизации (не старше 1 дня)
+        auth_time = int(auth_data.get('auth_date', 0))
+        if time.time() - auth_time > 86400:
+            return False
+            
+        return auth_data
+    except Exception as e:
+        print(f"❌ Telegram auth error: {e}")
+        return False
+
 # Загружаем настройки при старте
 print("🚀 Starting application...")
 sync_settings()
 
 @app.route('/')
 def home():
+    """Главная страница с авторизацией"""
+    user_id = session.get('user_id')
+    if user_id and user_id in ALLOWED_USER_IDS:
+        return redirect('/settings')
+    
     return """
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Group Settings</title>
+        <title>Donk Chat Settings</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <style>
             body {
-                font-family: Arial, sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -117,6 +149,8 @@ def home():
                 padding: 40px;
                 border-radius: 20px;
                 backdrop-filter: blur(10px);
+                max-width: 400px;
+                width: 90%;
             }
             h1 {
                 font-size: 24px;
@@ -124,28 +158,224 @@ def home():
             }
             p {
                 opacity: 0.8;
-                margin-bottom: 20px;
+                margin-bottom: 30px;
+                line-height: 1.5;
             }
-            a {
+            .btn {
+                background: #4f6df5;
                 color: white;
-                text-decoration: underline;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s;
+                text-decoration: none;
+                display: inline-block;
+            }
+            .btn:hover {
+                background: #3a56e8;
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            }
+            .error {
+                background: rgba(255, 59, 48, 0.1);
+                border: 1px solid #ff3b30;
+                padding: 15px;
+                border-radius: 10px;
+                margin-bottom: 20px;
             }
         </style>
     </head>
     <body>
         <div class="container">
             <h1>🎛️ Donk Chat Settings</h1>
-            <p>Этот интерфейс работает только через Telegram</p>
-            <p>Откройте через бота командой /settings</p>
-            <p><a href="/settings">Перейти к настройкам</a></p>
+            <p>Для доступа к настройкам группы необходимо авторизоваться через Telegram</p>
+            
+            <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                    data-telegram-login="donk_settings_bot" 
+                    data-size="large" 
+                    data-auth-url="/auth" 
+                    data-request-access="write"></script>
+            
+            <p style="margin-top: 20px; font-size: 14px; opacity: 0.7;">
+                Доступ только для администраторов группы
+            </p>
         </div>
     </body>
     </html>
     """
 
+@app.route('/auth')
+def auth():
+    """Обработчик авторизации Telegram"""
+    auth_data = dict(request.args)
+    verified_data = verify_telegram_authorization(auth_data.copy())
+    
+    if verified_data:
+        user_id = int(verified_data.get('id'))
+        session['user_id'] = user_id
+        session['username'] = verified_data.get('username')
+        session['first_name'] = verified_data.get('first_name')
+        
+        if user_id in ALLOWED_USER_IDS:
+            return redirect('/settings')
+        else:
+            return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Access Denied</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        text-align: center;
+                    }
+                    .container {
+                        background: rgba(255,255,255,0.1);
+                        padding: 40px;
+                        border-radius: 20px;
+                        backdrop-filter: blur(10px);
+                        max-width: 400px;
+                        width: 90%;
+                    }
+                    h1 {
+                        font-size: 24px;
+                        margin-bottom: 20px;
+                        color: #ff6b6b;
+                    }
+                    p {
+                        opacity: 0.8;
+                        margin-bottom: 20px;
+                        line-height: 1.5;
+                    }
+                    .btn {
+                        background: #4f6df5;
+                        color: white;
+                        border: none;
+                        padding: 12px 25px;
+                        border-radius: 10px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        text-decoration: none;
+                        display: inline-block;
+                    }
+                    .btn:hover {
+                        background: #3a56e8;
+                        transform: translateY(-2px);
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🚫 Доступ запрещен</h1>
+                    <p>У вас нет прав для управления настройками этой группы.</p>
+                    <p>Доступ разрешен только для администраторов.</p>
+                    <a href="/" class="btn">Вернуться на главную</a>
+                </div>
+            </body>
+            </html>
+            """
+    
+    return redirect('/')
+
+@app.route('/logout')
+def logout():
+    """Выход из системы"""
+    session.clear()
+    return redirect('/')
+
 @app.route('/settings')
 def settings_page():
     """Главная страница настроек"""
+    # Проверяем авторизацию для веб-доступа
+    user_id = session.get('user_id')
+    
+    # Если доступ через веб (не Telegram WebApp), проверяем права
+    if not request.headers.get('Sec-Fetch-Dest') == 'webapp':
+        if not user_id or user_id not in ALLOWED_USER_IDS:
+            return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Access Denied</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        text-align: center;
+                    }
+                    .container {
+                        background: rgba(255,255,255,0.1);
+                        padding: 40px;
+                        border-radius: 20px;
+                        backdrop-filter: blur(10px);
+                        max-width: 400px;
+                        width: 90%;
+                    }
+                    h1 {
+                        font-size: 24px;
+                        margin-bottom: 20px;
+                        color: #ff6b6b;
+                    }
+                    p {
+                        opacity: 0.8;
+                        margin-bottom: 20px;
+                        line-height: 1.5;
+                    }
+                    .btn {
+                        background: #4f6df5;
+                        color: white;
+                        border: none;
+                        padding: 12px 25px;
+                        border-radius: 10px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        text-decoration: none;
+                        display: inline-block;
+                    }
+                    .btn:hover {
+                        background: #3a56e8;
+                        transform: translateY(-2px);
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🚫 Доступ запрещен</h1>
+                    <p>У вас нет прав для управления настройками этой группы.</p>
+                    <p>Доступ разрешен только для администраторов.</p>
+                    <a href="/" class="btn">Вернуться на главную</a>
+                </div>
+            </body>
+            </html>
+            """
+    
+    # Для Telegram WebApp проверяем через initData
+    tg_webapp = False
+    if request.headers.get('Sec-Fetch-Dest') == 'webapp':
+        tg_webapp = True
+    
     return f"""
     <!DOCTYPE html>
     <html lang="ru">
@@ -186,6 +416,29 @@ def settings_page():
                 color: white;
                 padding: 20px;
                 text-align: center;
+                position: relative;
+            }}
+
+            .user-info {{
+                position: absolute;
+                top: 10px;
+                right: 15px;
+                font-size: 12px;
+                opacity: 0.8;
+            }}
+
+            .logout-btn {{
+                position: absolute;
+                top: 10px;
+                left: 15px;
+                background: rgba(255,255,255,0.2);
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 5px;
+                font-size: 12px;
+                cursor: pointer;
+                text-decoration: none;
             }}
 
             .header h1 {{
@@ -418,6 +671,8 @@ def settings_page():
     <body>
         <div class="container">
             <div class="header">
+                {'<a href="/logout" class="logout-btn">Выйти</a>' if not tg_webapp else ''}
+                {'<div class="user-info">' + (session.get('username') or session.get('first_name', 'User')) + '</div>' if not tg_webapp else ''}
                 <h1>Настройки группы</h1>
                 <p>Управление разрешениями чата</p>
             </div>
@@ -811,16 +1066,26 @@ def settings_page():
     </html>
     """
 
-# API endpoints
+# API endpoints с проверкой прав
 @app.route('/api/settings')
 def api_get_settings():
     """Возвращает текущие настройки"""
+    # Проверяем права для веб-доступа
+    user_id = session.get('user_id')
+    if not request.headers.get('Sec-Fetch-Dest') == 'webapp' and (not user_id or user_id not in ALLOWED_USER_IDS):
+        return jsonify({'error': 'Access denied'}), 403
+    
     print(f"📊 API: Getting current settings: {current_settings}")
     return jsonify(current_settings)
 
 @app.route('/api/update', methods=['POST'])
 def api_update_setting():
     """Обновляет одну настройку"""
+    # Проверяем права для веб-доступа
+    user_id = session.get('user_id')
+    if not request.headers.get('Sec-Fetch-Dest') == 'webapp' and (not user_id or user_id not in ALLOWED_USER_IDS):
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+    
     try:
         data = request.get_json()
         setting = data.get('setting')
@@ -856,6 +1121,11 @@ def api_update_setting():
 @app.route('/api/sync')
 def api_sync_settings():
     """Синхронизирует настройки с Telegram"""
+    # Проверяем права для веб-доступа
+    user_id = session.get('user_id')
+    if not request.headers.get('Sec-Fetch-Dest') == 'webapp' and (not user_id or user_id not in ALLOWED_USER_IDS):
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+    
     try:
         print("🔄 API: Syncing settings with Telegram")
         success = sync_settings()
@@ -871,6 +1141,11 @@ def api_sync_settings():
 @app.route('/api/apply')
 def api_apply_settings():
     """Применяет все текущие настройки"""
+    # Проверяем права для веб-доступа
+    user_id = session.get('user_id')
+    if not request.headers.get('Sec-Fetch-Dest') == 'webapp' and (not user_id or user_id not in ALLOWED_USER_IDS):
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+    
     try:
         print("🎯 API: Applying all settings")
         result = apply_settings()
@@ -900,7 +1175,7 @@ def bot_webhook():
             user_id = message['from']['id']
             chat_id = message['chat']['id']
             
-            # Проверяем доступ
+            # Проверяем доступ по ID
             if user_id not in ALLOWED_USER_IDS:
                 # Не отправляем сообщение - просто логируем
                 print(f"🚫 Access denied for user {user_id}")
@@ -911,7 +1186,7 @@ def bot_webhook():
                 text = message['text']
                 
                 if text == '/start' or text == '/settings':
-                    webapp_url = f"https://{request.host}/settings"
+                    webapp_url = "https://donkchatbot.onrender.com/settings"
                     
                     # Отправляем сообщение с кнопкой для открытия мини-приложения
                     telegram_api('sendMessage', {
@@ -940,7 +1215,7 @@ def set_webhook():
     if not BOT_TOKEN:
         return 'BOT_TOKEN not set'
     
-    webhook_url = f"https://{request.host}/webhook"
+    webhook_url = "https://donkchatbot.onrender.com/webhook"
     result = telegram_api('setWebhook', {'url': webhook_url})
     
     return jsonify({
@@ -971,7 +1246,7 @@ if __name__ == '__main__':
     
     # Автоматически устанавливаем вебхук при запуске
     if BOT_TOKEN:
-        webhook_url = f"https://{os.environ.get('HOST', 'https://donkchatbot.onrender.com')}/webhook"
+        webhook_url = "https://donkchatbot.onrender.com/webhook"
         print(f"🌐 Webhook URL: {webhook_url}")
         print("💡 Use /set_webhook to set webhook manually")
     
