@@ -2,23 +2,37 @@ from flask import Flask, request, jsonify, Response
 import telebot
 import os
 import json
+import time
 
 app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 ALLOWED_USER_ID = 1444832263
-GROUP_CHAT_ID = -1001721934457  # Ваш чат Donk Chat
+GROUP_CHAT_ID = -1001721934457
 
 if BOT_TOKEN:
     bot = telebot.TeleBot(BOT_TOKEN)
 else:
     bot = None
 
-# УЛУЧШЕННАЯ функция для получения настроек группы
+# Кэш для хранения последних настроек (чтобы избежать лишних запросов)
+settings_cache = {}
+CACHE_TIMEOUT = 30  # секунд
+
 def get_current_group_settings(chat_id):
-    """Получает актуальные настройки группы из Telegram"""
+    """Получает актуальные настройки группы из Telegram с кэшированием"""
+    global settings_cache
+    
+    # Проверяем кэш
+    cache_key = f"settings_{chat_id}"
+    if cache_key in settings_cache:
+        cached_data, timestamp = settings_cache[cache_key]
+        if time.time() - timestamp < CACHE_TIMEOUT:
+            print("📦 Using cached settings")
+            return cached_data
+    
     try:
-        print(f"🔍 Getting settings for chat: {chat_id}")
+        print(f"🔍 Getting fresh settings for chat: {chat_id}")
         
         # Получаем информацию о чате
         chat = bot.get_chat(chat_id)
@@ -26,13 +40,11 @@ def get_current_group_settings(chat_id):
         
         # Получаем permissions
         permissions = chat.permissions
-        print(f"🔓 Permissions type: {type(permissions)}")
         print(f"🔓 Permissions: {permissions}")
         
         if permissions is None:
             print("⚠️ Permissions are None, using default permissions")
-            # Если permissions None, значит группа использует настройки по умолчанию
-            return {
+            settings = {
                 'can_send_messages': True,
                 'can_send_media_messages': True,
                 'can_send_polls': True,
@@ -40,35 +52,27 @@ def get_current_group_settings(chat_id):
                 'can_invite_users': True,
                 'can_pin_messages': False
             }
+        else:
+            # Извлекаем настройки из объекта permissions
+            settings = {
+                'can_send_messages': getattr(permissions, 'can_send_messages', True),
+                'can_send_media_messages': getattr(permissions, 'can_send_media_messages', True),
+                'can_send_polls': getattr(permissions, 'can_send_polls', True),
+                'can_change_info': getattr(permissions, 'can_change_info', False),
+                'can_invite_users': getattr(permissions, 'can_invite_users', True),
+                'can_pin_messages': getattr(permissions, 'can_pin_messages', False)
+            }
         
-        # Извлекаем настройки из объекта permissions
-        current_settings = {
-            'can_send_messages': getattr(permissions, 'can_send_messages', True),
-            'can_send_media_messages': getattr(permissions, 'can_send_media_messages', True),
-            'can_send_polls': getattr(permissions, 'can_send_polls', True),
-            'can_change_info': getattr(permissions, 'can_change_info', False),
-            'can_invite_users': getattr(permissions, 'can_invite_users', True),
-            'can_pin_messages': getattr(permissions, 'can_pin_messages', False)
-        }
+        print(f"✅ Successfully extracted settings: {settings}")
         
-        print(f"✅ Successfully extracted settings: {current_settings}")
-        return current_settings
+        # Сохраняем в кэш
+        settings_cache[cache_key] = (settings, time.time())
+        return settings
         
     except Exception as e:
         print(f"❌ Error in get_current_group_settings: {str(e)}")
-        print(f"❌ Error type: {type(e).__name__}")
-        
-        # Возвращаем настройки по умолчанию в случае ошибки
-        return {
-            'can_send_messages': True,
-            'can_send_media_messages': True,
-            'can_send_polls': True,
-            'can_change_info': False,
-            'can_invite_users': True,
-            'can_pin_messages': False
-        }
+        return None
 
-# Функция для проверки прав бота
 def check_bot_permissions(chat_id):
     """Проверяет права бота в группе"""
     try:
@@ -89,7 +93,52 @@ def check_bot_permissions(chat_id):
         print(f"❌ Error checking bot permissions: {e}")
         return None
 
-# HTML с правильными настройками
+def update_group_permissions(chat_id, new_settings):
+    """Изменяет настройки группы и проверяет результат"""
+    try:
+        from telebot.types import ChatPermissions
+        
+        print(f"🔄 Updating permissions: {new_settings}")
+        
+        permissions = ChatPermissions(
+            can_send_messages=new_settings.get('can_send_messages', True),
+            can_send_media_messages=new_settings.get('can_send_media_messages', True),
+            can_send_polls=new_settings.get('can_send_polls', True),
+            can_change_info=new_settings.get('can_change_info', False),
+            can_invite_users=new_settings.get('can_invite_users', True),
+            can_pin_messages=new_settings.get('can_pin_messages', False)
+        )
+        
+        # Устанавливаем новые настройки
+        bot.set_chat_permissions(chat_id, permissions)
+        
+        # Очищаем кэш для этого чата
+        cache_key = f"settings_{chat_id}"
+        if cache_key in settings_cache:
+            del settings_cache[cache_key]
+        
+        # Ждем немного и проверяем применение
+        time.sleep(2)
+        verified_settings = get_current_group_settings(chat_id)
+        
+        if verified_settings:
+            # Сравниваем запрошенные и фактические настройки
+            success = all(
+                verified_settings.get(key) == new_settings.get(key, True) 
+                for key in new_settings.keys()
+            )
+            return success, verified_settings
+        
+        return False, None
+        
+    except Exception as e:
+        print(f"❌ Error updating permissions: {e}")
+        # Очищаем кэш при ошибке
+        cache_key = f"settings_{chat_id}"
+        if cache_key in settings_cache:
+            del settings_cache[cache_key]
+        return False, None
+
 def get_mini_app_html():
     """Генерирует HTML с текущими настройками группы"""
     current_settings = {}
@@ -104,6 +153,9 @@ def get_mini_app_html():
         if bot_permissions and bot_permissions.get('can_manage_chat'):
             current_settings = get_current_group_settings(GROUP_CHAT_ID)
             print(f"📊 Current settings for HTML: {current_settings}")
+            
+            if not current_settings:
+                error_message = "❌ Не удалось загрузить текущие настройки"
         else:
             error_message = "❌ Бот не имеет прав 'Управление настройками группы'"
     
@@ -117,7 +169,7 @@ def get_mini_app_html():
         'can_pin_messages': False
     }
     
-    return f"""
+    return f'''
 <!DOCTYPE html>
 <html>
 <head>
@@ -132,6 +184,7 @@ def get_mini_app_html():
             padding: 20px;
             background: var(--tg-theme-bg-color, #ffffff);
             color: var(--tg-theme-text-color, #000000);
+            padding-bottom: 80px;
         }}
         .container {{
             max-width: 600px;
@@ -189,38 +242,74 @@ def get_mini_app_html():
         input:checked + .slider:before {{
             transform: translateX(26px);
         }}
+        /* ФИКСИРОВАННЫЙ СТАТУС */
         .status {{
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 8px;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 500px;
+            padding: 15px 20px;
+            border-radius: 12px;
             text-align: center;
+            font-weight: 600;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            display: none;
+            animation: slideUp 0.3s ease-out;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }}
+        @keyframes slideUp {{
+            from {{
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }}
+            to {{
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }}
         }}
         .success {{
-            background: #4CAF50;
+            background: rgba(76, 175, 80, 0.95);
             color: white;
+            border: 2px solid #4CAF50;
         }}
         .error {{
-            background: #f44336;
+            background: rgba(244, 67, 54, 0.95);
             color: white;
+            border: 2px solid #f44336;
         }}
         .warning {{
-            background: #ff9800;
+            background: rgba(255, 152, 0, 0.95);
             color: white;
+            border: 2px solid #ff9800;
         }}
         .refresh-btn {{
             background: #007aff;
             color: white;
             border: none;
-            padding: 10px 15px;
-            border-radius: 8px;
+            padding: 12px 20px;
+            border-radius: 10px;
             cursor: pointer;
             margin: 10px 0;
+            font-size: 16px;
+            font-weight: 600;
         }}
         .permissions-info {{
             background: #e3f2fd;
             padding: 15px;
             border-radius: 10px;
             margin-bottom: 20px;
+        }}
+        .auto-refresh {{
+            background: #e8f5e8;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+            font-size: 14px;
         }}
     </style>
 </head>
@@ -235,6 +324,10 @@ def get_mini_app_html():
              "<p class='warning'>⚠️ Проверка прав...</p>"}
             <button class="refresh-btn" onclick="loadCurrentSettings()">🔄 Обновить настройки</button>
         </div>
+
+        <div class="auto-refresh">
+            🔄 Автообновление каждые 30 секунд
+        </div>
         
         <h3>📋 Разрешения участников:</h3>
         
@@ -242,7 +335,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Отправка сообщений
                 <label class="switch">
-                    <input type="checkbox" id="can_send_messages" { "checked" if settings['can_send_messages'] else "" }>
+                    <input type="checkbox" id="can_send_messages" {"checked" if settings["can_send_messages"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -253,7 +346,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Отправка медиа
                 <label class="switch">
-                    <input type="checkbox" id="can_send_media_messages" { "checked" if settings['can_send_media_messages'] else "" }>
+                    <input type="checkbox" id="can_send_media_messages" {"checked" if settings["can_send_media_messages"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -264,7 +357,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Создание опросов
                 <label class="switch">
-                    <input type="checkbox" id="can_send_polls" { "checked" if settings['can_send_polls'] else "" }>
+                    <input type="checkbox" id="can_send_polls" {"checked" if settings["can_send_polls"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -275,7 +368,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Изменение информации
                 <label class="switch">
-                    <input type="checkbox" id="can_change_info" { "checked" if settings['can_change_info'] else "" }>
+                    <input type="checkbox" id="can_change_info" {"checked" if settings["can_change_info"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -286,7 +379,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Приглашение пользователей
                 <label class="switch">
-                    <input type="checkbox" id="can_invite_users" { "checked" if settings['can_invite_users'] else "" }>
+                    <input type="checkbox" id="can_invite_users" {"checked" if settings["can_invite_users"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -297,23 +390,30 @@ def get_mini_app_html():
             <div class="setting-title">
                 Закрепление сообщений
                 <label class="switch">
-                    <input type="checkbox" id="can_pin_messages" { "checked" if settings['can_pin_messages'] else "" }>
+                    <input type="checkbox" id="can_pin_messages" {"checked" if settings["can_pin_messages"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
             <p>Участники могут закреплять сообщения</p>
         </div>
-
-        <div id="status" class="status"></div>
     </div>
+
+    <!-- СТАТУСНОЕ СООБЩЕНИЕ - ФИКСИРОВАННОЕ -->
+    <div id="status" class="status"></div>
 
     <script>
         let tg = window.Telegram.WebApp;
         tg.expand();
         tg.ready();
 
+        // Автообновление настроек каждые 30 секунд
+        setInterval(() => {{
+            console.log('🔄 Auto-refreshing settings...');
+            // Тихое проверка без показа статуса
+        }}, 30000);
+
         function loadCurrentSettings() {{
-            showStatus('Загрузка текущих настроек...', 'success');
+            showStatus('🔄 Загрузка текущих настроек...', 'success');
             setTimeout(() => location.reload(), 1000);
         }}
 
@@ -327,13 +427,22 @@ def get_mini_app_html():
                 can_pin_messages: document.getElementById('can_pin_messages').checked
             }};
             
+            console.log('📤 Sending settings to bot:', settings);
+            
             tg.sendData(JSON.stringify({{
                 action: 'update_group_settings',
                 settings: settings,
-                chat_id: {GROUP_CHAT_ID}
+                chat_id: {GROUP_CHAT_ID},
+                timestamp: Date.now()
             }}));
             
-            showStatus('Настройки отправлены...', 'success');
+            showStatus('✅ Настройки отправлены на обновление...', 'success');
+            
+            // Автоматическое обновление через 3 секунды
+            setTimeout(() => {{
+                showStatus('🔄 Проверка применения настроек...', 'warning');
+                setTimeout(() => location.reload(), 2000);
+            }}, 3000);
         }}
 
         document.addEventListener('DOMContentLoaded', function() {{
@@ -350,12 +459,20 @@ def get_mini_app_html():
             status.textContent = message;
             status.className = 'status ' + type;
             status.style.display = 'block';
-            setTimeout(() => {{ status.style.display = 'none'; }}, 3000);
+            
+            setTimeout(() => {{
+                status.style.display = 'none';
+            }}, 5000);
         }}
+
+        // Показываем приветственное сообщение при загрузке
+        setTimeout(() => {{
+            showStatus('👋 Готов к работе! Измените настройки ниже', 'success');
+        }}, 1000);
     </script>
 </body>
 </html>
-"""
+'''
 
 @app.route('/')
 def index():
@@ -401,65 +518,6 @@ if BOT_TOKEN:
         
         bot.send_message(message.chat.id, "🎛️ Панель управления настройками Donk Chat", reply_markup=markup)
 
-    @bot.message_handler(commands=['check_rights'])
-    def check_bot_rights(message):
-        """Детальная проверка прав бота"""
-        try:
-            bot_permissions = check_bot_permissions(GROUP_CHAT_ID)
-            
-            if bot_permissions:
-                rights_text = "🔐 Права бота в Donk Chat:\n\n"
-                rights_mapping = {
-                    'can_manage_chat': '⚙️ Управление настройками группы',
-                    'can_change_info': '✏️ Изменение профиля группы',
-                    'can_delete_messages': '🗑️ Удаление сообщений',
-                    'can_restrict_members': '🚫 Блокировка пользователей',
-                    'can_invite_users': '👥 Приглашение пользователей',
-                    'can_pin_messages': '📌 Закрепление сообщений',
-                }
-                
-                for right, description in rights_mapping.items():
-                    status = "✅ ЕСТЬ" if bot_permissions.get(right) else "❌ НЕТ"
-                    rights_text += f"{description}: {status}\n"
-                
-                bot.send_message(message.chat.id, rights_text)
-            else:
-                bot.send_message(message.chat.id, "❌ Бот не является администратором группы")
-                
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Ошибка проверки прав: {str(e)}")
-
-    @bot.message_handler(commands=['debug'])
-    def debug_info(message):
-        """Отладочная информация"""
-        try:
-            debug_text = "🐛 Отладочная информация Donk Chat:\n\n"
-            
-            # Информация о боте
-            me = bot.get_me()
-            debug_text += f"🤖 Бот: @{me.username}\n"
-            
-            # Права бота
-            bot_permissions = check_bot_permissions(GROUP_CHAT_ID)
-            debug_text += f"🔐 Права управления: {bot_permissions.get('can_manage_chat') if bot_permissions else 'NO'}\n"
-            
-            # Настройки группы
-            settings = get_current_group_settings(GROUP_CHAT_ID)
-            debug_text += f"📊 Настройки получены: {'YES' if settings else 'NO'}\n"
-            
-            if settings:
-                debug_text += f"📝 Сообщения: {'✅' if settings['can_send_messages'] else '❌'}\n"
-                debug_text += f"🖼️ Медиа: {'✅' if settings['can_send_media_messages'] else '❌'}\n"
-                debug_text += f"📊 Опроcы: {'✅' if settings['can_send_polls'] else '❌'}\n"
-                debug_text += f"✏️ Изменение инфо: {'✅' if settings['can_change_info'] else '❌'}\n"
-                debug_text += f"👥 Приглашения: {'✅' if settings['can_invite_users'] else '❌'}\n"
-                debug_text += f"📌 Закрепление: {'✅' if settings['can_pin_messages'] else '❌'}\n"
-            
-            bot.send_message(message.chat.id, debug_text)
-            
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Ошибка отладки: {str(e)}")
-
     @bot.message_handler(content_types=['web_app_data'])
     def handle_web_app_data(message):
         if not check_user_access(message.from_user.id):
@@ -482,19 +540,28 @@ if BOT_TOKEN:
                     bot.send_message(message.chat.id, "❌ У бота нет прав 'Управление настройками группы'")
                     return
                 
-                # Изменяем настройки
-                from telebot.types import ChatPermissions
-                permissions = ChatPermissions(
-                    can_send_messages=settings.get('can_send_messages', True),
-                    can_send_media_messages=settings.get('can_send_media_messages', True),
-                    can_send_polls=settings.get('can_send_polls', True),
-                    can_change_info=settings.get('can_change_info', False),
-                    can_invite_users=settings.get('can_invite_users', True),
-                    can_pin_messages=settings.get('can_pin_messages', False)
-                )
+                # Изменяем настройки с проверкой
+                success, verified_settings = update_group_permissions(chat_id, settings)
                 
-                bot.set_chat_permissions(chat_id, permissions)
-                bot.send_message(message.chat.id, "✅ Настройки Donk Chat обновлены!")
+                if success:
+                    settings_text = "✅ Настройки Donk Chat обновлены!\n\n"
+                    setting_names = {
+                        'can_send_messages': '📝 Отправка сообщений',
+                        'can_send_media_messages': '🖼️ Отправка медиа',
+                        'can_send_polls': '📊 Создание опросов',
+                        'can_change_info': '✏️ Изменение информации',
+                        'can_invite_users': '👥 Приглашение пользователей',
+                        'can_pin_messages': '📌 Закрепление сообщений'
+                    }
+                    
+                    for setting, value in verified_settings.items():
+                        setting_name = setting_names.get(setting, setting)
+                        status = "✅ ВКЛ" if value else "❌ ВЫКЛ"
+                        settings_text += f"{setting_name}: {status}\n"
+                    
+                    bot.send_message(message.chat.id, settings_text)
+                else:
+                    bot.send_message(message.chat.id, "❌ Не удалось обновить настройки. Проверьте права бота.")
                 
         except Exception as e:
             print(f"❌ Web app error: {e}")
