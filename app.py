@@ -41,7 +41,19 @@ def apply_settings():
     """Применяет текущие настройки к группе"""
     data = {
         'chat_id': GROUP_CHAT_ID,
-        'permissions': current_settings
+        'permissions': {
+            'can_send_messages': current_settings['can_send_messages'],
+            'can_send_media_messages': current_settings['can_send_media_messages'],
+            'can_send_photos': current_settings['can_send_photos'],
+            'can_send_videos': current_settings['can_send_videos'],
+            'can_send_video_notes': current_settings['can_send_video_notes'],
+            'can_send_voice_notes': current_settings['can_send_voice_notes'],
+            'can_send_stickers': current_settings['can_send_stickers'],
+            'can_send_polls': current_settings['can_send_polls'],
+            'can_change_info': current_settings['can_change_info'],
+            'can_invite_users': current_settings['can_invite_users'],
+            'can_pin_messages': current_settings['can_pin_messages']
+        }
     }
     result = telegram_api('setChatPermissions', data)
     print(f"🎯 Apply settings result: {result}")
@@ -153,10 +165,10 @@ def settings_page():
             body {{
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 min-height: 100vh;
-                padding: 20px;
+                padding: 10px;
                 display: flex;
                 justify-content: center;
-                align-items: center;
+                align-items: flex-start;
             }}
 
             .container {{
@@ -166,17 +178,18 @@ def settings_page():
                 border-radius: 20px;
                 box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
                 overflow: hidden;
+                margin: 10px 0;
             }}
 
             .header {{
                 background: linear-gradient(90deg, #4f6df5, #3a56e8);
                 color: white;
-                padding: 25px 20px;
+                padding: 20px;
                 text-align: center;
             }}
 
             .header h1 {{
-                font-size: 24px;
+                font-size: 22px;
                 font-weight: 600;
                 margin-bottom: 5px;
             }}
@@ -187,103 +200,106 @@ def settings_page():
             }}
 
             .settings-container {{
-                padding: 25px 20px;
+                padding: 20px 15px;
             }}
 
             .section {{
-                margin-bottom: 30px;
+                margin-bottom: 25px;
             }}
 
             .section-title {{
-                font-size: 18px;
+                font-size: 16px;
                 font-weight: 600;
                 color: #333;
-                margin-bottom: 20px;
-                padding-bottom: 10px;
+                margin-bottom: 15px;
+                padding-bottom: 8px;
                 border-bottom: 2px solid #4f6df5;
                 display: flex;
                 align-items: center;
-                gap: 10px;
+                gap: 8px;
             }}
 
             .setting-item {{
-                margin-bottom: 20px;
-                padding: 15px;
+                margin-bottom: 15px;
+                padding: 12px;
                 background: #f8f9fa;
-                border-radius: 12px;
+                border-radius: 10px;
                 transition: all 0.3s ease;
             }}
 
             .setting-item:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                transform: translateY(-1px);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             }}
 
             .setting-header {{
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 8px;
+                margin-bottom: 6px;
             }}
 
             .setting-title {{
                 font-weight: 600;
                 color: #333;
-                font-size: 16px;
+                font-size: 14px;
                 display: flex;
                 align-items: center;
-                gap: 10px;
+                gap: 8px;
             }}
 
             .setting-value {{
                 font-weight: 600;
                 color: #4f6df5;
-                font-size: 14px;
+                font-size: 13px;
             }}
 
             .setting-description {{
                 color: #666;
-                font-size: 13px;
-                margin-top: 5px;
+                font-size: 12px;
+                margin-top: 4px;
+                line-height: 1.3;
             }}
 
             .slider-container {{
                 position: relative;
-                height: 30px;
+                height: 28px;
                 display: flex;
                 align-items: center;
             }}
 
             .buttons {{
                 display: flex;
-                gap: 15px;
-                margin-top: 30px;
+                gap: 10px;
+                margin-top: 25px;
+                flex-wrap: wrap;
             }}
 
             .btn {{
                 flex: 1;
-                padding: 15px;
+                min-width: 140px;
+                padding: 12px 15px;
                 border: none;
-                border-radius: 12px;
+                border-radius: 10px;
                 font-weight: 600;
-                font-size: 16px;
+                font-size: 14px;
                 cursor: pointer;
                 transition: all 0.3s;
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                gap: 8px;
+                gap: 6px;
             }}
 
             .btn-primary {{
                 background: linear-gradient(90deg, #4f6df5, #3a56e8);
                 color: white;
-                box-shadow: 0 4px 12px rgba(79, 109, 245, 0.3);
+                box-shadow: 0 3px 8px rgba(79, 109, 245, 0.3);
             }}
 
             .btn-primary:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 6px 15px rgba(79, 109, 245, 0.4);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(79, 109, 245, 0.4);
             }}
 
             .btn-secondary {{
@@ -297,10 +313,10 @@ def settings_page():
 
             .status {{
                 text-align: center;
-                margin-top: 20px;
-                padding: 12px;
-                border-radius: 10px;
-                font-size: 14px;
+                margin-top: 15px;
+                padding: 10px;
+                border-radius: 8px;
+                font-size: 13px;
                 display: none;
             }}
 
@@ -323,16 +339,16 @@ def settings_page():
             }}
 
             .icon {{
-                width: 20px;
-                height: 20px;
+                width: 16px;
+                height: 16px;
             }}
 
             /* Switch styles */
             .switch {{
                 position: relative;
                 display: inline-block;
-                width: 54px;
-                height: 32px;
+                width: 50px;
+                height: 28px;
             }}
 
             .switch input {{
@@ -350,14 +366,14 @@ def settings_page():
                 bottom: 0;
                 background-color: #ccc;
                 transition: .4s;
-                border-radius: 32px;
+                border-radius: 28px;
             }}
 
             .switch-slider:before {{
                 position: absolute;
                 content: "";
-                height: 26px;
-                width: 26px;
+                height: 22px;
+                width: 22px;
                 left: 3px;
                 bottom: 3px;
                 background-color: white;
@@ -374,7 +390,28 @@ def settings_page():
             }}
 
             .emoji {{
-                font-size: 18px;
+                font-size: 16px;
+            }}
+
+            @media (max-width: 480px) {{
+                .container {{
+                    margin: 5px;
+                    border-radius: 15px;
+                }}
+                
+                .header {{
+                    padding: 15px;
+                }}
+                
+                .settings-container {{
+                    padding: 15px 10px;
+                }}
+                
+                .btn {{
+                    min-width: 120px;
+                    font-size: 13px;
+                    padding: 10px 12px;
+                }}
             }}
         </style>
     </head>
@@ -787,7 +824,7 @@ def api_update_setting():
     try:
         data = request.get_json()
         setting = data.get('setting')
-        value = data.get('value')
+        value = bool(data.get('value'))
         
         print(f"🔄 API: Updating {setting} to {value}")
         
