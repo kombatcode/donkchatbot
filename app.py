@@ -13,6 +13,11 @@ GROUP_CHAT_ID = -1001721934457
 current_settings = {
     'can_send_messages': True,
     'can_send_media_messages': True,
+    'can_send_photos': True,
+    'can_send_videos': True,
+    'can_send_video_notes': True,
+    'can_send_voice_notes': True,
+    'can_send_stickers': True,
     'can_send_polls': True,
     'can_change_info': False,
     'can_invite_users': True,
@@ -178,35 +183,61 @@ def settings_page():
                 padding: 25px 20px;
             }
 
-            .setting-item {
+            .section {
                 margin-bottom: 30px;
-                padding-bottom: 25px;
-                border-bottom: 1px solid #f0f0f0;
             }
 
-            .setting-item:last-child {
-                border-bottom: none;
-                margin-bottom: 0;
-                padding-bottom: 0;
+            .section-title {
+                font-size: 18px;
+                font-weight: 600;
+                color: #333;
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #4f6df5;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .setting-item {
+                margin-bottom: 20px;
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 12px;
+                transition: all 0.3s ease;
+            }
+
+            .setting-item:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             }
 
             .setting-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 15px;
+                margin-bottom: 8px;
             }
 
             .setting-title {
                 font-weight: 600;
                 color: #333;
                 font-size: 16px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
             }
 
             .setting-value {
                 font-weight: 600;
                 color: #4f6df5;
-                font-size: 16px;
+                font-size: 14px;
+            }
+
+            .setting-description {
+                color: #666;
+                font-size: 13px;
+                margin-top: 5px;
             }
 
             .slider-container {
@@ -278,6 +309,12 @@ def settings_page():
                 display: block;
             }
 
+            .status.info {
+                background: #e3f2fd;
+                color: #1565c0;
+                display: block;
+            }
+
             .icon {
                 width: 20px;
                 height: 20px;
@@ -328,6 +365,10 @@ def settings_page():
             input:checked + .switch-slider:before {
                 transform: translateX(22px);
             }
+
+            .emoji {
+                font-size: 18px;
+            }
         </style>
     </head>
     <body>
@@ -338,81 +379,214 @@ def settings_page():
             </div>
             
             <div class="settings-container">
-                <div class="setting-item">
-                    <div class="setting-header">
-                        <span class="setting-title">💬 Отправка сообщений</span>
-                        <span class="setting-value" id="messages_status">ON</span>
+                <!-- Основные разрешения -->
+                <div class="section">
+                    <div class="section-title">
+                        <span class="emoji">💬</span>
+                        Основные разрешения
                     </div>
-                    <div class="slider-container">
-                        <label class="switch">
-                            <input type="checkbox" id="can_send_messages" onchange="toggleSetting('can_send_messages', this.checked, 'messages_status')">
-                            <span class="switch-slider"></span>
-                        </label>
+                    
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">💬</span>
+                                Отправка сообщений
+                            </div>
+                            <span class="setting-value" id="messages_status">ON</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_send_messages" onchange="toggleSetting('can_send_messages', this.checked, 'messages_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Участники могут отправлять текстовые сообщения</div>
                     </div>
-                </div>
-                
-                <div class="setting-item">
-                    <div class="setting-header">
-                        <span class="setting-title">🖼️ Отправка медиа</span>
-                        <span class="setting-value" id="media_status">ON</span>
-                    </div>
-                    <div class="slider-container">
-                        <label class="switch">
-                            <input type="checkbox" id="can_send_media_messages" onchange="toggleSetting('can_send_media_messages', this.checked, 'media_status')">
-                            <span class="switch-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                
-                <div class="setting-item">
-                    <div class="setting-header">
-                        <span class="setting-title">📊 Создание опросов</span>
-                        <span class="setting-value" id="polls_status">ON</span>
-                    </div>
-                    <div class="slider-container">
-                        <label class="switch">
-                            <input type="checkbox" id="can_send_polls" onchange="toggleSetting('can_send_polls', this.checked, 'polls_status')">
-                            <span class="switch-slider"></span>
-                        </label>
+
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">📊</span>
+                                Создание опросов
+                            </div>
+                            <span class="setting-value" id="polls_status">ON</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_send_polls" onchange="toggleSetting('can_send_polls', this.checked, 'polls_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Участники могут создавать опросы и викторины</div>
                     </div>
                 </div>
 
-                <div class="setting-item">
-                    <div class="setting-header">
-                        <span class="setting-title">✏️ Изменение информации</span>
-                        <span class="setting-value" id="info_status">OFF</span>
+                <!-- Медиафайлы -->
+                <div class="section">
+                    <div class="section-title">
+                        <span class="emoji">🖼️</span>
+                        Медиафайлы
                     </div>
-                    <div class="slider-container">
-                        <label class="switch">
-                            <input type="checkbox" id="can_change_info" onchange="toggleSetting('can_change_info', this.checked, 'info_status')">
-                            <span class="switch-slider"></span>
-                        </label>
+
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">🖼️</span>
+                                Все медиафайлы
+                            </div>
+                            <span class="setting-value" id="media_status">ON</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_send_media_messages" onchange="toggleSetting('can_send_media_messages', this.checked, 'media_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Все типы медиафайлов (общая настройка)</div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">📸</span>
+                                Фотографии
+                            </div>
+                            <span class="setting-value" id="photos_status">ON</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_send_photos" onchange="toggleSetting('can_send_photos', this.checked, 'photos_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Отправка изображений и фотографий</div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">🎥</span>
+                                Видео
+                            </div>
+                            <span class="setting-value" id="videos_status">ON</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_send_videos" onchange="toggleSetting('can_send_videos', this.checked, 'videos_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Отправка видеофайлов</div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">📹</span>
+                                Видеосообщения
+                            </div>
+                            <span class="setting-value" id="video_notes_status">ON</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_send_video_notes" onchange="toggleSetting('can_send_video_notes', this.checked, 'video_notes_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Круглые видео-сообщения (video notes)</div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">🎤</span>
+                                Голосовые сообщения
+                            </div>
+                            <span class="setting-value" id="voice_notes_status">ON</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_send_voice_notes" onchange="toggleSetting('can_send_voice_notes', this.checked, 'voice_notes_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Отправка голосовых сообщений (войсы)</div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">🩷</span>
+                                Стикеры и GIF
+                            </div>
+                            <span class="setting-value" id="stickers_status">ON</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_send_stickers" onchange="toggleSetting('can_send_stickers', this.checked, 'stickers_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Отправка стикеров и анимированных GIF</div>
                     </div>
                 </div>
 
-                <div class="setting-item">
-                    <div class="setting-header">
-                        <span class="setting-title">👥 Приглашение пользователей</span>
-                        <span class="setting-value" id="invite_status">ON</span>
+                <!-- Управление группой -->
+                <div class="section">
+                    <div class="section-title">
+                        <span class="emoji">👥</span>
+                        Управление группой
                     </div>
-                    <div class="slider-container">
-                        <label class="switch">
-                            <input type="checkbox" id="can_invite_users" onchange="toggleSetting('can_invite_users', this.checked, 'invite_status')">
-                            <span class="switch-slider"></span>
-                        </label>
-                    </div>
-                </div>
 
-                <div class="setting-item">
-                    <div class="setting-header">
-                        <span class="setting-title">📌 Закрепление сообщений</span>
-                        <span class="setting-value" id="pin_status">OFF</span>
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">✏️</span>
+                                Изменение информации
+                            </div>
+                            <span class="setting-value" id="info_status">OFF</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_change_info" onchange="toggleSetting('can_change_info', this.checked, 'info_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Изменение названия, фото и описания группы</div>
                     </div>
-                    <div class="slider-container">
-                        <label class="switch">
-                            <input type="checkbox" id="can_pin_messages" onchange="toggleSetting('can_pin_messages', this.checked, 'pin_status')">
-                            <span class="switch-slider"></span>
-                        </label>
+
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">👥</span>
+                                Приглашение пользователей
+                            </div>
+                            <span class="setting-value" id="invite_status">ON</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_invite_users" onchange="toggleSetting('can_invite_users', this.checked, 'invite_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Участники могут приглашать новых пользователей</div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-header">
+                            <div class="setting-title">
+                                <span class="emoji">📌</span>
+                                Закрепление сообщений
+                            </div>
+                            <span class="setting-value" id="pin_status">OFF</span>
+                        </div>
+                        <div class="slider-container">
+                            <label class="switch">
+                                <input type="checkbox" id="can_pin_messages" onchange="toggleSetting('can_pin_messages', this.checked, 'pin_status')">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-description">Участники могут закреплять сообщения</div>
                     </div>
                 </div>
                 
@@ -464,25 +638,39 @@ def settings_page():
             }
 
             function updateUI(settings) {
-                // Обновляем переключатели
+                // Основные разрешения
                 document.getElementById('can_send_messages').checked = settings.can_send_messages;
-                document.getElementById('can_send_media_messages').checked = settings.can_send_media_messages;
                 document.getElementById('can_send_polls').checked = settings.can_send_polls;
+                
+                // Медиафайлы
+                document.getElementById('can_send_media_messages').checked = settings.can_send_media_messages;
+                document.getElementById('can_send_photos').checked = settings.can_send_photos;
+                document.getElementById('can_send_videos').checked = settings.can_send_videos;
+                document.getElementById('can_send_video_notes').checked = settings.can_send_video_notes;
+                document.getElementById('can_send_voice_notes').checked = settings.can_send_voice_notes;
+                document.getElementById('can_send_stickers').checked = settings.can_send_stickers;
+                
+                // Управление группой
                 document.getElementById('can_change_info').checked = settings.can_change_info;
                 document.getElementById('can_invite_users').checked = settings.can_invite_users;
                 document.getElementById('can_pin_messages').checked = settings.can_pin_messages;
                 
                 // Обновляем статусы
                 document.getElementById('messages_status').textContent = settings.can_send_messages ? 'ON' : 'OFF';
-                document.getElementById('media_status').textContent = settings.can_send_media_messages ? 'ON' : 'OFF';
                 document.getElementById('polls_status').textContent = settings.can_send_polls ? 'ON' : 'OFF';
+                document.getElementById('media_status').textContent = settings.can_send_media_messages ? 'ON' : 'OFF';
+                document.getElementById('photos_status').textContent = settings.can_send_photos ? 'ON' : 'OFF';
+                document.getElementById('videos_status').textContent = settings.can_send_videos ? 'ON' : 'OFF';
+                document.getElementById('video_notes_status').textContent = settings.can_send_video_notes ? 'ON' : 'OFF';
+                document.getElementById('voice_notes_status').textContent = settings.can_send_voice_notes ? 'ON' : 'OFF';
+                document.getElementById('stickers_status').textContent = settings.can_send_stickers ? 'ON' : 'OFF';
                 document.getElementById('info_status').textContent = settings.can_change_info ? 'ON' : 'OFF';
                 document.getElementById('invite_status').textContent = settings.can_invite_users ? 'ON' : 'OFF';
                 document.getElementById('pin_status').textContent = settings.can_pin_messages ? 'ON' : 'OFF';
             }
 
             function toggleSetting(setting, value, statusElement) {
-                showStatus('🔄 Изменение настроек...', 'success');
+                showStatus('🔄 Изменение настроек...', 'info');
                 
                 fetch('/api/update', {
                     method: 'POST',
@@ -522,7 +710,7 @@ def settings_page():
             }
 
             function syncSettings() {
-                showStatus('🔄 Синхронизация с Telegram...', 'success');
+                showStatus('🔄 Синхронизация с Telegram...', 'info');
                 
                 fetch('/api/sync')
                     .then(response => {
@@ -547,7 +735,7 @@ def settings_page():
             }
 
             function applyAllSettings() {
-                showStatus('🎯 Применение всех настроек...', 'success');
+                showStatus('🎯 Применение всех настроек...', 'info');
                 
                 fetch('/api/apply')
                     .then(response => {
