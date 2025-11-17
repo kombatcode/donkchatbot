@@ -883,6 +883,86 @@ def api_apply_settings():
         print(f"❌ API: Apply exception: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+# Webhook для обработки команд бота
+@app.route('/webhook', methods=['POST'])
+def bot_webhook():
+    """Обработчик вебхука от Telegram"""
+    if not BOT_TOKEN:
+        return 'OK'
+    
+    try:
+        data = request.get_json()
+        print(f"🤖 Webhook received: {data}")
+        
+        # Обрабатываем сообщения
+        if 'message' in data:
+            message = data['message']
+            user_id = message['from']['id']
+            chat_id = message['chat']['id']
+            
+            # Проверяем доступ
+            if user_id not in ALLOWED_USER_IDS:
+                telegram_api('sendMessage', {
+                    'chat_id': chat_id,
+                    'text': '🚫 У вас нет доступа к настройкам группы'
+                })
+                return 'OK'
+            
+            # Обрабатываем команды
+            if 'text' in message:
+                text = message['text']
+                
+                if text == '/start' or text == '/settings':
+                    webapp_url = f"https://{request.host}/settings"
+                    
+                    telegram_api('sendMessage', {
+                        'chat_id': chat_id,
+                        'text': '🎛️ *Donk Chat Settings*\n\nУправление настройками группы',
+                        'parse_mode': 'Markdown',
+                        'reply_markup': {
+                            'inline_keyboard': [[
+                                {
+                                    'text': '⚙️ Открыть настройки',
+                                    'web_app': {'url': webapp_url}
+                                }
+                            ]]
+                        }
+                    })
+        
+    except Exception as e:
+        print(f"❌ Webhook error: {e}")
+    
+    return 'OK'
+
+# Установка вебхука
+@app.route('/set_webhook', methods=['GET'])
+def set_webhook():
+    """Установка вебхука для бота"""
+    if not BOT_TOKEN:
+        return 'BOT_TOKEN not set'
+    
+    webhook_url = f"https://{request.host}/webhook"
+    result = telegram_api('setWebhook', {'url': webhook_url})
+    
+    return jsonify({
+        'success': result.get('ok', False),
+        'webhook_url': webhook_url,
+        'result': result
+    })
+
+# Удаление вебхука
+@app.route('/delete_webhook', methods=['GET'])
+def delete_webhook():
+    """Удаление вебхука"""
+    if not BOT_TOKEN:
+        return 'BOT_TOKEN not set'
+    
+    result = telegram_api('deleteWebhook', {})
+    return jsonify({
+        'success': result.get('ok', False),
+        'result': result
+    })
+
 if __name__ == '__main__':
     print("🚀 Starting Group Settings Manager")
     print(f"🎯 Group: {GROUP_CHAT_ID}")
@@ -890,5 +970,6 @@ if __name__ == '__main__':
     print(f"📊 Initial settings: {current_settings}")
     print(f"🔑 BOT_TOKEN: {'Set' if BOT_TOKEN else 'Not set!'}")
     
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    # Автоматически устанавливаем вебхук при запуске
+    if BOT_TOKEN:
+        webhook_url = f"https://{os.environ.get('HOST', 'your-host.com
