@@ -972,4 +972,9 @@ if __name__ == '__main__':
     
     # Автоматически устанавливаем вебхук при запуске
     if BOT_TOKEN:
-        webhook_url = f"https://{os.environ.get('HOST', 'your-host.com
+        webhook_url = f"https://{os.environ.get('HOST', 'https://donkchatbot.onrender.com')}/webhook"
+        print(f"🌐 Webhook URL: {webhook_url}")
+        print("💡 Use /set_webhook to set webhook manually")
+    
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
