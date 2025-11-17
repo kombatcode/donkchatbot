@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify
 import requests
 import os
 import json
+import hmac
+import hashlib
+from urllib.parse import parse_qs, unquote
 
 app = Flask(__name__)
 
@@ -91,33 +94,43 @@ def sync_settings():
 def verify_telegram_init_data(init_data):
     """Проверяет initData от Telegram WebApp"""
     try:
-        from urllib.parse import parse_qs
-        from hashlib import sha256
-        import hmac
+        print(f"🔐 Verifying initData: {init_data}")
         
-        # Парсим initData
+        # Декодируем URL-encoded строку
+        init_data = unquote(init_data)
+        
+        # Парсим параметры
         parsed_data = parse_qs(init_data)
         
         # Извлекаем хэш
         hash_value = parsed_data.get('hash', [''])[0]
         if not hash_value:
+            print("❌ No hash in initData")
             return False
             
         # Создаем data-check-string
         items = []
-        for key, value in parsed_data.items():
-            if key != 'hash':
-                items.append(f"{key}={value[0]}")
+        for key, values in parsed_data.items():
+            if key != 'hash' and values:
+                items.append(f"{key}={values[0]}")
         items.sort()
         data_check_string = "\n".join(items)
         
+        print(f"📝 Data check string: {data_check_string}")
+        
         # Вычисляем секретный ключ
-        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), sha256).digest()
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
         
         # Проверяем хэш
-        computed_hash = hmac.new(secret_key, data_check_string.encode(), sha256).hexdigest()
+        computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         
-        return computed_hash == hash_value
+        print(f"🔑 Computed hash: {computed_hash}")
+        print(f"🔑 Received hash: {hash_value}")
+        
+        is_valid = computed_hash == hash_value
+        print(f"✅ Hash validation: {is_valid}")
+        
+        return is_valid
     except Exception as e:
         print(f"❌ Telegram initData verification error: {e}")
         return False
@@ -125,14 +138,21 @@ def verify_telegram_init_data(init_data):
 def get_user_from_init_data(init_data):
     """Извлекает пользователя из initData"""
     try:
-        from urllib.parse import parse_qs
-        import json
+        print(f"👤 Parsing user from initData: {init_data}")
+        
+        # Декодируем URL-encoded строку
+        init_data = unquote(init_data)
         
         parsed_data = parse_qs(init_data)
         user_str = parsed_data.get('user', [''])[0]
         if user_str:
             user_data = json.loads(user_str)
-            return user_data.get('id'), user_data.get('username', ''), user_data.get('first_name', '')
+            user_id = user_data.get('id')
+            username = user_data.get('username', '')
+            first_name = user_data.get('first_name', '')
+            print(f"👤 User data: id={user_id}, username={username}, first_name={first_name}")
+            return user_id, username, first_name
+        print("❌ No user data in initData")
         return None, '', ''
     except Exception as e:
         print(f"❌ Error parsing user data: {e}")
@@ -234,11 +254,11 @@ def home():
 @app.route('/settings')
 def settings_page():
     """Главная страница настроек - доступ только через Telegram WebApp"""
-    # Проверяем, что запрос пришел из Telegram WebApp
-    init_data = request.headers.get('X-Telegram-Init-Data', '')
+    # Получаем initData из параметра tgWebAppData
+    init_data = request.args.get('tgWebAppData', '')
     
     if not init_data:
-        print("❌ Direct access attempt to /settings")
+        print("❌ Direct access attempt to /settings - no tgWebAppData")
         return """
         <!DOCTYPE html>
         <html>
@@ -316,10 +336,11 @@ def settings_page():
         return "Access denied", 403
     
     print(f"🔐 User access attempt: user_id={user_id}, username={username}, first_name={first_name}")
+    print(f"🔐 Allowed users: {ALLOWED_USER_IDS}")
     
     # Проверяем права доступа
     if user_id not in ALLOWED_USER_IDS:
-        print(f"🚫 Access denied for user {user_id}")
+        print(f"🚫 Access denied for user {user_id} - not in allowed list")
         return f"""
         <!DOCTYPE html>
         <html>
@@ -1059,7 +1080,7 @@ def settings_page():
 def api_get_settings():
     """Возвращает текущие настройки"""
     # Проверяем, что запрос пришел из Telegram WebApp
-    init_data = request.headers.get('X-Telegram-Init-Data', '')
+    init_data = request.args.get('tgWebAppData', '')
     if not init_data or not verify_telegram_init_data(init_data):
         return jsonify({'error': 'Access denied'}), 403
     
@@ -1074,7 +1095,7 @@ def api_get_settings():
 def api_update_setting():
     """Обновляет одну настройку"""
     # Проверяем, что запрос пришел из Telegram WebApp
-    init_data = request.headers.get('X-Telegram-Init-Data', '')
+    init_data = request.args.get('tgWebAppData', '')
     if not init_data or not verify_telegram_init_data(init_data):
         return jsonify({'success': False, 'error': 'Access denied'}), 403
     
@@ -1118,7 +1139,7 @@ def api_update_setting():
 def api_sync_settings():
     """Синхронизирует настройки с Telegram"""
     # Проверяем, что запрос пришел из Telegram WebApp
-    init_data = request.headers.get('X-Telegram-Init-Data', '')
+    init_data = request.args.get('tgWebAppData', '')
     if not init_data or not verify_telegram_init_data(init_data):
         return jsonify({'success': False, 'error': 'Access denied'}), 403
     
@@ -1142,7 +1163,7 @@ def api_sync_settings():
 def api_apply_settings():
     """Применяет все текущие настройки"""
     # Проверяем, что запрос пришел из Telegram WebApp
-    init_data = request.headers.get('X-Telegram-Init-Data', '')
+    init_data = request.args.get('tgWebAppData', '')
     if not init_data or not verify_telegram_init_data(init_data):
         return jsonify({'success': False, 'error': 'Access denied'}), 403
     
