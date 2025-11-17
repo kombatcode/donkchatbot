@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 ALLOWED_USER_ID = 1444832263
-GROUP_CHAT_ID = -1001721934457
+GROUP_CHAT_ID = -1001721934457  # Ваш чат Donk Chat
 
 if BOT_TOKEN:
     bot = telebot.TeleBot(BOT_TOKEN)
@@ -43,25 +43,17 @@ def get_current_group_settings(chat_id):
             print("⚠️ Permissions are None - using defaults")
             settings = {
                 'can_send_messages': True,
-                'can_send_photos': True,
-                'can_send_videos': True,
-                'can_send_video_notes': True,
-                'can_send_voice_notes': True,
-                'can_send_stickers': True,
+                'can_send_media_messages': True,
                 'can_send_polls': True,
                 'can_change_info': False,
                 'can_invite_users': True,
                 'can_pin_messages': False
             }
         else:
-            # ИСПРАВЛЕННЫЕ НАЗВАНИЯ ДЛЯ ПОЛУЧЕНИЯ НАСТРОЕК
+            # ИСПОЛЬЗУЕМ ТОЛЬКО БАЗОВЫЕ ПАРАМЕТРЫ
             settings = {
                 'can_send_messages': getattr(permissions, 'can_send_messages', True),
-                'can_send_photos': getattr(permissions, 'can_send_photos', True),
-                'can_send_videos': getattr(permissions, 'can_send_videos', True),
-                'can_send_video_notes': getattr(permissions, 'can_send_video_notes', True),
-                'can_send_voice_notes': getattr(permissions, 'can_send_voice_notes', True),
-                'can_send_stickers': getattr(permissions, 'can_send_stickers', True),
+                'can_send_media_messages': getattr(permissions, 'can_send_media_messages', True),
                 'can_send_polls': getattr(permissions, 'can_send_polls', True),
                 'can_change_info': getattr(permissions, 'can_change_info', False),
                 'can_invite_users': getattr(permissions, 'can_invite_users', True),
@@ -75,7 +67,7 @@ def get_current_group_settings(chat_id):
     except Exception as e:
         print(f"❌ Error getting settings: {str(e)}")
         return None
-        
+
 def check_bot_permissions(chat_id):
     """Проверяет права бота в группе"""
     try:
@@ -98,7 +90,7 @@ def check_bot_permissions(chat_id):
         return None
 
 def update_group_permissions(chat_id, new_settings):
-    """Изменяет настройки группы с детальной диагностикой"""
+    """Изменяет настройки группы - УПРОЩЕННАЯ ВЕРСИЯ"""
     try:
         from telebot.types import ChatPermissions
         
@@ -106,35 +98,17 @@ def update_group_permissions(chat_id, new_settings):
         print(f"   Chat ID: {chat_id}")
         print(f"   New settings: {new_settings}")
         
-        # Получаем текущие настройки ДО изменения
-        old_settings = get_current_group_settings(chat_id)
-        print(f"   Old settings: {old_settings}")
-        
-        # ИСПРАВЛЕННЫЕ НАЗВАНИЯ ПАРАМЕТРОВ!
+        # ИСПОЛЬЗУЕМ ТОЛЬКО БАЗОВЫЕ ПАРАМЕТРЫ которые точно работают
         permissions = ChatPermissions(
             can_send_messages=new_settings.get('can_send_messages', True),
-            can_send_media_messages=(
-                new_settings.get('can_send_photos', True) or 
-                new_settings.get('can_send_videos', True) or
-                new_settings.get('can_send_video_notes', True) or
-                new_settings.get('can_send_voice_notes', True) or
-                new_settings.get('can_send_stickers', True)
-            ),  # Общий параметр для медиа
+            can_send_media_messages=new_settings.get('can_send_media_messages', True),
             can_send_polls=new_settings.get('can_send_polls', True),
             can_change_info=new_settings.get('can_change_info', False),
             can_invite_users=new_settings.get('can_invite_users', True),
-            can_pin_messages=new_settings.get('can_pin_messages', False),
-            # Отдельные параметры для конкретных типов медиа
-            can_send_photos=new_settings.get('can_send_photos', True),
-            can_send_videos=new_settings.get('can_send_videos', True),
-            can_send_video_notes=new_settings.get('can_send_video_notes', True),
-            can_send_voice_notes=new_settings.get('can_send_voice_notes', True),
-            can_send_stickers=new_settings.get('can_send_stickers', True),
-            can_send_documents=True,  # Всегда разрешаем файлы
-            can_send_audios=True      # Всегда разрешаем аудио
+            can_pin_messages=new_settings.get('can_pin_messages', False)
         )
         
-        print(f"   Permissions object: {permissions}")
+        print(f"   Final permissions: {permissions}")
         
         # Пытаемся установить настройки
         result = bot.set_chat_permissions(chat_id, permissions)
@@ -154,18 +128,16 @@ def update_group_permissions(chat_id, new_settings):
         
         if verified_settings:
             # Проверяем, что настройки изменились
-            changes_applied = all(
+            success = all(
                 verified_settings.get(key) == new_settings.get(key, True) 
-                for key in ['can_send_messages', 'can_send_polls', 'can_change_info', 'can_invite_users', 'can_pin_messages']
+                for key in ['can_send_messages', 'can_send_media_messages', 'can_send_polls', 'can_change_info', 'can_invite_users', 'can_pin_messages']
             )
             
-            if changes_applied:
+            if success:
                 print("   ✅ SUCCESS: Settings applied correctly!")
                 return True, verified_settings
             else:
                 print("   ⚠️ WARNING: Settings were set but not verified")
-                print(f"   Requested: {new_settings}")
-                print(f"   Actual: {verified_settings}")
                 return False, verified_settings
         else:
             print("   ❌ ERROR: Could not verify settings after update")
@@ -199,11 +171,7 @@ def get_mini_app_html():
     
     settings = current_settings if current_settings else {
         'can_send_messages': True,
-        'can_send_photos': True,
-        'can_send_videos': True,
-        'can_send_video_notes': True,
-        'can_send_voice_notes': True,
-        'can_send_stickers': True,
+        'can_send_media_messages': True,
         'can_send_polls': True,
         'can_change_info': False,
         'can_invite_users': True,
@@ -371,7 +339,7 @@ def get_mini_app_html():
         </div>
 
         <div class="debug-info">
-            🔍 Режим отладки включен. Проверяйте логи в Render.
+            🎯 <strong>Упрощенная версия</strong> - используются только базовые настройки
         </div>
         
         <div class="section-title">💬 Основные разрешения</div>
@@ -389,6 +357,17 @@ def get_mini_app_html():
 
         <div class="setting">
             <div class="setting-title">
+                Отправка медиа
+                <label class="switch">
+                    <input type="checkbox" id="can_send_media_messages" {"checked" if settings["can_send_media_messages"] else ""}>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <p>Фото, видео, стикеры, голосовые сообщения</p>
+        </div>
+
+        <div class="setting">
+            <div class="setting-title">
                 Создание опросов
                 <label class="switch">
                     <input type="checkbox" id="can_send_polls" {"checked" if settings["can_send_polls"] else ""}>
@@ -396,63 +375,6 @@ def get_mini_app_html():
                 </label>
             </div>
             <p>Участники могут создавать опросы</p>
-        </div>
-
-        <div class="section-title">🖼️ Медиафайлы</div>
-        
-        <div class="setting">
-            <div class="setting-title">
-                Фотографии
-                <label class="switch">
-                    <input type="checkbox" id="can_send_photos" {"checked" if settings["can_send_photos"] else ""}>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <p>Отправка изображений и фото</p>
-        </div>
-
-        <div class="setting">
-            <div class="setting-title">
-                Видео
-                <label class="switch">
-                    <input type="checkbox" id="can_send_videos" {"checked" if settings["can_send_videos"] else ""}>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <p>Отправка видеофайлов</p>
-        </div>
-
-        <div class="setting">
-            <div class="setting-title">
-                Видеосообщения
-                <label class="switch">
-                    <input type="checkbox" id="can_send_video_notes" {"checked" if settings["can_send_video_notes"] else ""}>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <p>Круглые видео-сообщения (video notes)</p>
-        </div>
-
-        <div class="setting">
-            <div class="setting-title">
-                Голосовые сообщения
-                <label class="switch">
-                    <input type="checkbox" id="can_send_voice_notes" {"checked" if settings["can_send_voice_notes"] else ""}>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <p>Отправка голосовых сообщений (войсы)</p>
-        </div>
-
-        <div class="setting">
-            <div class="setting-title">
-                Стикеры и GIF
-                <label class="switch">
-                    <input type="checkbox" id="can_send_stickers" {"checked" if settings["can_send_stickers"] else ""}>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <p>Отправка стикеров и анимированных GIF</p>
         </div>
 
         <div class="section-title">👥 Управление группой</div>
@@ -507,11 +429,7 @@ def get_mini_app_html():
         function updateSetting(setting, value) {{
             const settings = {{
                 can_send_messages: document.getElementById('can_send_messages').checked,
-                can_send_photos: document.getElementById('can_send_photos').checked,
-                can_send_videos: document.getElementById('can_send_videos').checked,
-                can_send_video_notes: document.getElementById('can_send_video_notes').checked,
-                can_send_voice_notes: document.getElementById('can_send_voice_notes').checked,
-                can_send_stickers: document.getElementById('can_send_stickers').checked,
+                can_send_media_messages: document.getElementById('can_send_media_messages').checked,
                 can_send_polls: document.getElementById('can_send_polls').checked,
                 can_change_info: document.getElementById('can_change_info').checked,
                 can_invite_users: document.getElementById('can_invite_users').checked,
@@ -614,93 +532,30 @@ if BOT_TOKEN:
         
         bot.send_message(message.chat.id, "🎛️ Панель управления настройками Donk Chat", reply_markup=markup)
 
-    @bot.message_handler(commands=['test_permissions'])
-    def test_permissions_command(message):
-        """Тестовая команда для проверки изменения настроек"""
+    @bot.message_handler(commands=['test_simple'])
+    def test_simple_permissions(message):
+        """Тестовая команда для проверки БАЗОВЫХ настроек"""
         try:
-            # Пробуем выключить отправку сообщений
             from telebot.types import ChatPermissions
             
+            # Пробуем выключить отправку сообщений (базовый параметр)
             test_permissions = ChatPermissions(
                 can_send_messages=False,  # ВЫКЛЮЧАЕМ сообщения
-                can_send_photos=True,
-                can_send_videos=True,
-                can_send_video_notes=True,
-                can_send_voice_notes=True,
-                can_send_stickers=True,
+                can_send_media_messages=True,
                 can_send_polls=True,
                 can_change_info=False,
                 can_invite_users=True,
                 can_pin_messages=False
             )
             
-            print(f"🧪 TEST: Setting permissions to {test_permissions}")
+            print(f"🧪 SIMPLE TEST: Setting basic permissions")
             result = bot.set_chat_permissions(GROUP_CHAT_ID, test_permissions)
-            print(f"🧪 TEST: set_chat_permissions result: {result}")
+            print(f"🧪 SIMPLE TEST: set_chat_permissions result: {result}")
             
-            bot.send_message(message.chat.id, "🧪 Тестовые настройки применены. Проверьте чат!")
+            bot.send_message(message.chat.id, "🧪 Базовые настройки применены. Проверьте чат!")
             
         except Exception as e:
             bot.send_message(message.chat.id, f"❌ Тестовая ошибка: {str(e)}")
-
-    @bot.message_handler(commands=['check_params'])
-    def check_available_parameters(message):
-        """Проверяет доступные параметры ChatPermissions"""
-        try:
-            from telebot.types import ChatPermissions
-            
-            # Создаем тестовый объект чтобы посмотреть какие параметры доступны
-            test_perms = ChatPermissions()
-            
-            params_info = "🔧 Доступные параметры ChatPermissions:\n\n"
-            
-            # Получаем все атрибуты объекта
-            available_params = [attr for attr in dir(test_perms) if not attr.startswith('_')]
-            
-            for param in sorted(available_params):
-                value = getattr(test_perms, param, 'N/A')
-                params_info += f"• {param}: {value}\n"
-            
-            bot.send_message(message.chat.id, params_info)
-            
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Ошибка: {str(e)}")
-        
-    @bot.message_handler(commands=['debug_data'])
-    def debug_data_flow(message):
-        """Проверка потока данных"""
-        try:
-            debug_text = "🐛 Отладка потока данных:\n\n"
-            
-            # Создаем тестовые данные
-            test_data = {
-                'action': 'test_settings',
-                'settings': {
-                    'can_send_messages': False,
-                    'can_send_photos': True,
-                    'can_send_videos': True,
-                    'can_send_video_notes': True,
-                    'can_send_voice_notes': True,
-                    'can_send_stickers': True,
-                    'can_send_polls': False,
-                    'can_change_info': False,
-                    'can_invite_users': True,
-                    'can_pin_messages': False
-                },
-                'chat_id': GROUP_CHAT_ID,
-                'timestamp': time.time()
-            }
-            
-            debug_text += f"📦 Тестовые данные: {test_data}\n"
-            debug_text += f"🔗 WebApp URL: https://donkchatbot.onrender.com/group_settings.html\n"
-            debug_text += f"👤 Ваш ID: {message.from_user.id}\n"
-            debug_text += f"✅ Разрешенный ID: {ALLOWED_USER_ID}\n"
-            debug_text += f"🔐 Доступ: {'ЕСТЬ' if check_user_access(message.from_user.id) else 'НЕТ'}"
-            
-            bot.send_message(message.chat.id, debug_text)
-            
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Ошибка отладки: {str(e)}")
 
     @bot.message_handler(content_types=['web_app_data'])
     def handle_web_app_data(message):
@@ -750,11 +605,7 @@ if BOT_TOKEN:
                     settings_text = "✅ Настройки Donk Chat обновлены!\n\n"
                     setting_names = {
                         'can_send_messages': '💬 Сообщения',
-                        'can_send_photos': '🖼️ Фотографии',
-                        'can_send_videos': '🎥 Видео',
-                        'can_send_video_notes': '📹 Видеосообщения',
-                        'can_send_voice_notes': '🎤 Голосовые сообщения',
-                        'can_send_stickers': '🩷 Стикеры и GIF',
+                        'can_send_media_messages': '🖼️ Медиа',
                         'can_send_polls': '📊 Опроcы',
                         'can_change_info': '✏️ Изменение инфо',
                         'can_invite_users': '👥 Приглашения',
@@ -791,6 +642,7 @@ if __name__ == '__main__':
             bot.set_webhook(url="https://donkchatbot.onrender.com/webhook")
             print("✅ Webhook set successfully")
             print(f"🎯 Target chat: {GROUP_CHAT_ID}")
+            print("🎯 USING BASIC PERMISSIONS ONLY")
         except Exception as e:
             print(f"⚠️ Webhook setup failed: {e}")
     
