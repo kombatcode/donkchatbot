@@ -54,6 +54,7 @@ def get_current_group_settings(chat_id):
                 'can_pin_messages': False
             }
         else:
+            # ИСПРАВЛЕННЫЕ НАЗВАНИЯ ДЛЯ ПОЛУЧЕНИЯ НАСТРОЕК
             settings = {
                 'can_send_messages': getattr(permissions, 'can_send_messages', True),
                 'can_send_photos': getattr(permissions, 'can_send_photos', True),
@@ -74,7 +75,7 @@ def get_current_group_settings(chat_id):
     except Exception as e:
         print(f"❌ Error getting settings: {str(e)}")
         return None
-
+        
 def check_bot_permissions(chat_id):
     """Проверяет права бота в группе"""
     try:
@@ -109,17 +110,28 @@ def update_group_permissions(chat_id, new_settings):
         old_settings = get_current_group_settings(chat_id)
         print(f"   Old settings: {old_settings}")
         
+        # ИСПРАВЛЕННЫЕ НАЗВАНИЯ ПАРАМЕТРОВ!
         permissions = ChatPermissions(
             can_send_messages=new_settings.get('can_send_messages', True),
+            can_send_media_messages=(
+                new_settings.get('can_send_photos', True) or 
+                new_settings.get('can_send_videos', True) or
+                new_settings.get('can_send_video_notes', True) or
+                new_settings.get('can_send_voice_notes', True) or
+                new_settings.get('can_send_stickers', True)
+            ),  # Общий параметр для медиа
+            can_send_polls=new_settings.get('can_send_polls', True),
+            can_change_info=new_settings.get('can_change_info', False),
+            can_invite_users=new_settings.get('can_invite_users', True),
+            can_pin_messages=new_settings.get('can_pin_messages', False),
+            # Отдельные параметры для конкретных типов медиа
             can_send_photos=new_settings.get('can_send_photos', True),
             can_send_videos=new_settings.get('can_send_videos', True),
             can_send_video_notes=new_settings.get('can_send_video_notes', True),
             can_send_voice_notes=new_settings.get('can_send_voice_notes', True),
             can_send_stickers=new_settings.get('can_send_stickers', True),
-            can_send_polls=new_settings.get('can_send_polls', True),
-            can_change_info=new_settings.get('can_change_info', False),
-            can_invite_users=new_settings.get('can_invite_users', True),
-            can_pin_messages=new_settings.get('can_pin_messages', False)
+            can_send_documents=True,  # Всегда разрешаем файлы
+            can_send_audios=True      # Всегда разрешаем аудио
         )
         
         print(f"   Permissions object: {permissions}")
@@ -144,7 +156,7 @@ def update_group_permissions(chat_id, new_settings):
             # Проверяем, что настройки изменились
             changes_applied = all(
                 verified_settings.get(key) == new_settings.get(key, True) 
-                for key in new_settings.keys()
+                for key in ['can_send_messages', 'can_send_polls', 'can_change_info', 'can_invite_users', 'can_pin_messages']
             )
             
             if changes_applied:
@@ -631,6 +643,29 @@ if BOT_TOKEN:
         except Exception as e:
             bot.send_message(message.chat.id, f"❌ Тестовая ошибка: {str(e)}")
 
+    @bot.message_handler(commands=['check_params'])
+    def check_available_parameters(message):
+        """Проверяет доступные параметры ChatPermissions"""
+        try:
+            from telebot.types import ChatPermissions
+            
+            # Создаем тестовый объект чтобы посмотреть какие параметры доступны
+            test_perms = ChatPermissions()
+            
+            params_info = "🔧 Доступные параметры ChatPermissions:\n\n"
+            
+            # Получаем все атрибуты объекта
+            available_params = [attr for attr in dir(test_perms) if not attr.startswith('_')]
+            
+            for param in sorted(available_params):
+                value = getattr(test_perms, param, 'N/A')
+                params_info += f"• {param}: {value}\n"
+            
+            bot.send_message(message.chat.id, params_info)
+            
+        except Exception as e:
+            bot.send_message(message.chat.id, f"❌ Ошибка: {str(e)}")
+        
     @bot.message_handler(commands=['debug_data'])
     def debug_data_flow(message):
         """Проверка потока данных"""
