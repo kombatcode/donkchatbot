@@ -9,18 +9,27 @@ app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 ALLOWED_USER_ID = 1444832263
-GROUP_CHAT_ID = -1001721934457
+GROUP_CHAT_ID = -1001721934457  # Ваш чат Donk Chat
+
+# ПЕРЕМЕННЫЕ-ФЛАГИ ДЛЯ КАЖДОГО ПОЛЗУНКА
+current_settings = {
+    'can_send_messages': True,
+    'can_send_media_messages': True,
+    'can_send_polls': True,
+    'can_change_info': False,
+    'can_invite_users': True,
+    'can_pin_messages': False
+}
 
 # Прямые API вызовы к Telegram
 def telegram_api(method, data):
     """Прямой вызов Telegram Bot API"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
     try:
+        print(f"📡 Calling API: {method} with data: {data}")
         response = requests.post(url, json=data, timeout=10)
         result = response.json()
-        print(f"📡 API {method}: {result.get('ok', False)}")
-        if not result.get('ok'):
-            print(f"❌ API Error: {result}")
+        print(f"📡 API Response: {result}")
         return result
     except Exception as e:
         print(f"❌ API Request failed: {e}")
@@ -30,79 +39,104 @@ def get_chat_info(chat_id):
     """Получает информацию о чате"""
     return telegram_api('getChat', {'chat_id': chat_id})
 
-def get_chat_permissions(chat_id):
-    """Получает текущие разрешения чата"""
-    chat_info = get_chat_info(chat_id)
-    if chat_info.get('ok'):
-        return chat_info['result'].get('permissions', {})
-    return {}
-
-def set_chat_permissions_direct(chat_id, permissions):
-    """Устанавливает разрешения чата напрямую через API"""
-    data = {
-        'chat_id': chat_id,
-        'permissions': permissions
-    }
-    return telegram_api('setChatPermissions', data)
-
-def set_single_permission(chat_id, permission_name, value):
-    """Устанавливает одно разрешение, сохраняя остальные"""
+def apply_all_permissions():
+    """Применяет ВСЕ текущие настройки из переменных"""
     try:
-        # Получаем текущие разрешения
-        current_permissions = get_chat_permissions(chat_id)
-        print(f"🔍 Current permissions: {current_permissions}")
+        print(f"🎯 APPLYING ALL SETTINGS: {current_settings}")
         
-        if not current_permissions:
-            # Если не удалось получить, используем дефолтные
-            current_permissions = {
-                'can_send_messages': True,
-                'can_send_media_messages': True,
-                'can_send_polls': True,
-                'can_change_info': False,
-                'can_invite_users': True,
-                'can_pin_messages': False
-            }
+        data = {
+            'chat_id': GROUP_CHAT_ID,
+            'permissions': current_settings
+        }
         
-        # Обновляем только нужное разрешение
-        current_permissions[permission_name] = value
-        print(f"🔄 New permissions: {current_permissions}")
-        
-        # Устанавливаем обновленные разрешения
-        result = set_chat_permissions_direct(chat_id, current_permissions)
+        result = telegram_api('setChatPermissions', data)
         
         if result.get('ok'):
-            print(f"✅ Successfully set {permission_name} to {value}")
+            print("✅ ALL SETTINGS APPLIED SUCCESSFULLY!")
             return True
         else:
-            print(f"❌ Failed to set {permission_name}: {result}")
+            print(f"❌ FAILED TO APPLY SETTINGS: {result}")
             return False
             
     except Exception as e:
-        print(f"❌ Error in set_single_permission: {e}")
+        print(f"❌ Error in apply_all_permissions: {e}")
         return False
 
-def test_permission(permission_name, value):
-    """Тестирует установку конкретного разрешения"""
-    print(f"🧪 Testing {permission_name} = {value}")
-    return set_single_permission(GROUP_CHAT_ID, permission_name, value)
+def update_setting(setting_name, new_value):
+    """Обновляет одну настройку и сразу применяет ВСЕ настройки"""
+    try:
+        print(f"🔄 UPDATING SETTING: {setting_name} -> {new_value}")
+        
+        # Обновляем переменную
+        current_settings[setting_name] = new_value
+        print(f"📊 CURRENT SETTINGS AFTER UPDATE: {current_settings}")
+        
+        # Применяем ВСЕ настройки
+        success = apply_all_permissions()
+        
+        if success:
+            print(f"✅ SUCCESS: {setting_name} set to {new_value}")
+            return True
+        else:
+            print(f"❌ FAILED: Could not set {setting_name}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error in update_setting: {e}")
+        return False
+
+def load_current_settings_from_telegram():
+    """Загружает текущие настройки из Telegram и обновляет переменные"""
+    try:
+        print("🔍 Loading current settings from Telegram...")
+        chat_info = get_chat_info(GROUP_CHAT_ID)
+        
+        if chat_info.get('ok'):
+            permissions = chat_info['result'].get('permissions', {})
+            print(f"📋 Loaded permissions from Telegram: {permissions}")
+            
+            # Обновляем наши переменные
+            for key in current_settings.keys():
+                if key in permissions:
+                    current_settings[key] = permissions[key]
+            
+            print(f"🔄 Updated current_settings: {current_settings}")
+            return True
+        else:
+            print("❌ Failed to load settings from Telegram")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error loading settings: {e}")
+        return False
+
+def test_specific_setting(setting_name, value):
+    """Тестирует конкретную настройку"""
+    print(f"🧪 TESTING: {setting_name} = {value}")
+    return update_setting(setting_name, value)
+
+def test_all_settings():
+    """Тестирует все настройки по очереди"""
+    tests = [
+        ('can_send_messages', False, '💬 Сообщения'),
+        ('can_send_media_messages', False, '🖼️ Медиа'),
+        ('can_send_polls', False, '📊 Опроcы'),
+        ('can_change_info', True, '✏️ Изменение инфо'),
+        ('can_invite_users', False, '👥 Приглашения'),
+        ('can_pin_messages', True, '📌 Закрепление')
+    ]
+    
+    results = []
+    for setting, value, name in tests:
+        success = test_specific_setting(setting, value)
+        results.append(f"{name}: {'✅' if success else '❌'}")
+        time.sleep(1)  # Небольшая пауза между запросами
+    
+    return results
 
 def get_mini_app_html():
-    """Генерирует HTML с текущими настройками группы"""
-    current_permissions = {}
-    
-    if BOT_TOKEN:
-        current_permissions = get_chat_permissions(GROUP_CHAT_ID)
-        print(f"📊 Current permissions for HTML: {current_permissions}")
-    
-    # Значения по умолчанию
-    settings = {
-        'can_send_messages': current_permissions.get('can_send_messages', True),
-        'can_send_media_messages': current_permissions.get('can_send_media_messages', True),
-        'can_send_polls': current_permissions.get('can_send_polls', True),
-        'can_change_info': current_permissions.get('can_change_info', False),
-        'can_invite_users': current_permissions.get('can_invite_users', True),
-        'can_pin_messages': current_permissions.get('can_pin_messages', False)
-    }
+    """Генерирует HTML с текущими настройками из переменных"""
+    print(f"🎨 Generating HTML with settings: {current_settings}")
     
     return f'''
 <!DOCTYPE html>
@@ -267,6 +301,14 @@ def get_mini_app_html():
             cursor: pointer;
             font-size: 12px;
         }}
+        .vars-display {{
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }}
     </style>
 </head>
 <body>
@@ -274,19 +316,25 @@ def get_mini_app_html():
         <div class="permissions-info">
             <h3>⚙️ Управление настройками Donk Chat</h3>
             <p><strong>ID группы:</strong> {GROUP_CHAT_ID}</p>
-            <p><strong>Метод:</strong> Прямые API вызовы</p>
-            <button class="refresh-btn" onclick="loadCurrentSettings()">🔄 Обновить настройки</button>
+            <p><strong>Метод:</strong> Переменные-флаги + API</p>
+            <button class="refresh-btn" onclick="loadCurrentSettings()">🔄 Загрузить из Telegram</button>
+            <button class="refresh-btn" onclick="applyAllSettings()">🎯 Применить все настройки</button>
         </div>
 
         <div class="debug-info">
-            🚀 <strong>ПРЯМЫЕ API ВЫЗОВЫ</strong> - обход pyTelegramBotAPI
+            🎯 <strong>СИСТЕМА ПЕРЕМЕННЫХ</strong> - каждый ползунок меняет переменную
+        </div>
+
+        <div class="vars-display">
+            <strong>Текущие переменные:</strong><br>
+            {json.dumps(current_settings, indent=2, ensure_ascii=False)}
         </div>
 
         <div class="test-buttons">
-            <button class="test-btn" onclick="testPermission('can_send_messages', false)">🧪 Выкл сообщения</button>
-            <button class="test-btn" onclick="testPermission('can_send_media_messages', false)">🧪 Выкл медиа</button>
-            <button class="test-btn" onclick="testPermission('can_send_polls', false)">🧪 Выкл опросы</button>
-            <button class="test-btn" onclick="testAllPermissions()">🧪 Тест всех</button>
+            <button class="test-btn" onclick="testSetting('can_send_messages', false)">🧪 Выкл сообщения</button>
+            <button class="test-btn" onclick="testSetting('can_send_media_messages', false)">🧪 Выкл медиа</button>
+            <button class="test-btn" onclick="testSetting('can_send_polls', false)">🧪 Выкл опросы</button>
+            <button class="test-btn" onclick="testAllSettings()">🧪 Тест всех</button>
         </div>
         
         <div class="section-title">💬 Основные разрешения</div>
@@ -295,7 +343,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Отправка сообщений
                 <label class="switch">
-                    <input type="checkbox" id="can_send_messages" {"checked" if settings["can_send_messages"] else ""}>
+                    <input type="checkbox" id="can_send_messages" {"checked" if current_settings["can_send_messages"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -306,7 +354,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Отправка медиа
                 <label class="switch">
-                    <input type="checkbox" id="can_send_media_messages" {"checked" if settings["can_send_media_messages"] else ""}>
+                    <input type="checkbox" id="can_send_media_messages" {"checked" if current_settings["can_send_media_messages"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -317,7 +365,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Создание опросов
                 <label class="switch">
-                    <input type="checkbox" id="can_send_polls" {"checked" if settings["can_send_polls"] else ""}>
+                    <input type="checkbox" id="can_send_polls" {"checked" if current_settings["can_send_polls"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -330,7 +378,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Изменение информации
                 <label class="switch">
-                    <input type="checkbox" id="can_change_info" {"checked" if settings["can_change_info"] else ""}>
+                    <input type="checkbox" id="can_change_info" {"checked" if current_settings["can_change_info"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -341,7 +389,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Приглашение пользователей
                 <label class="switch">
-                    <input type="checkbox" id="can_invite_users" {"checked" if settings["can_invite_users"] else ""}>
+                    <input type="checkbox" id="can_invite_users" {"checked" if current_settings["can_invite_users"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -352,7 +400,7 @@ def get_mini_app_html():
             <div class="setting-title">
                 Закрепление сообщений
                 <label class="switch">
-                    <input type="checkbox" id="can_pin_messages" {"checked" if settings["can_pin_messages"] else ""}>
+                    <input type="checkbox" id="can_pin_messages" {"checked" if current_settings["can_pin_messages"] else ""}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -369,71 +417,79 @@ def get_mini_app_html():
         tg.ready();
 
         function loadCurrentSettings() {{
-            showStatus('🔄 Загрузка текущих настроек...', 'success');
-            setTimeout(() => location.reload(), 1000);
+            showStatus('🔄 Загрузка настроек из Telegram...', 'warning');
+            // Отправляем запрос на загрузку настроек
+            sendAction('load_settings');
         }}
 
-        // ОТДЕЛЬНЫЕ ФУНКЦИИ ДЛЯ КАЖДОГО ПЕРЕКЛЮЧАТЕЛЯ
+        function applyAllSettings() {{
+            showStatus('🎯 Применение всех настроек...', 'warning');
+            sendAction('apply_all_settings');
+        }}
+
+        function testSetting(setting, value) {{
+            updateSetting(setting, value, `🧪 Тест ${{setting}}`);
+        }}
+
+        function testAllSettings() {{
+            showStatus('🧪 Запуск тестов всех настроек...', 'warning');
+            sendAction('test_all_settings');
+        }}
+
+        // ОСНОВНЫЕ ФУНКЦИИ ДЛЯ ПОЛЗУНКОВ
         function updateSendMessages(enabled) {{
-            sendSettingUpdate('can_send_messages', enabled, '💬 Сообщения');
+            updateSetting('can_send_messages', enabled, '💬 Сообщения');
         }}
 
         function updateSendMedia(enabled) {{
-            sendSettingUpdate('can_send_media_messages', enabled, '🖼️ Медиа');
+            updateSetting('can_send_media_messages', enabled, '🖼️ Медиа');
         }}
 
         function updateSendPolls(enabled) {{
-            sendSettingUpdate('can_send_polls', enabled, '📊 Опроcы');
+            updateSetting('can_send_polls', enabled, '📊 Опроcы');
         }}
 
         function updateChangeInfo(enabled) {{
-            sendSettingUpdate('can_change_info', enabled, '✏️ Изменение информации');
+            updateSetting('can_change_info', enabled, '✏️ Изменение информации');
         }}
 
         function updateInviteUsers(enabled) {{
-            sendSettingUpdate('can_invite_users', enabled, '👥 Приглашения');
+            updateSetting('can_invite_users', enabled, '👥 Приглашения');
         }}
 
         function updatePinMessages(enabled) {{
-            sendSettingUpdate('can_pin_messages', enabled, '📌 Закрепление');
+            updateSetting('can_pin_messages', enabled, '📌 Закрепление');
         }}
 
-        // ТЕСТОВЫЕ ФУНКЦИИ
-        function testPermission(permission, value) {{
-            sendSettingUpdate(permission, value, `🧪 Тест ${{permission}}`);
-        }}
-
-        function testAllPermissions() {{
-            const tests = [
-                ['can_send_messages', false, '💬 Сообщения'],
-                ['can_send_media_messages', false, '🖼️ Медиа'],
-                ['can_send_polls', false, '📊 Опроcы']
-            ];
-            
-            showStatus('🧪 Запуск тестов...', 'warning');
-            
-            tests.forEach(([permission, value, name], index) => {{
-                setTimeout(() => {{
-                    sendSettingUpdate(permission, value, name);
-                }}, index * 2000);
-            }});
-        }}
-
-        function sendSettingUpdate(setting, value, name) {{
-            console.log(`📤 Setting ${{setting}} to ${{value}}`);
+        function updateSetting(setting, value, name) {{
+            console.log(`🔄 Updating ${{setting}} to ${{value}}`);
             
             const data = {{
-                action: 'update_single_setting',
+                action: 'update_setting',
                 setting: setting,
                 value: value,
                 chat_id: {GROUP_CHAT_ID},
-                timestamp: Date.now(),
-                test_name: name
+                setting_name: name,
+                timestamp: Date.now()
             }};
             
+            sendDataToServer(data);
+            showStatus(`🔄 ${{name}}: ${{value ? 'ВКЛ' : 'ВЫКЛ'}}`, 'warning');
+        }}
+
+        function sendAction(action) {{
+            const data = {{
+                action: action,
+                chat_id: {GROUP_CHAT_ID},
+                timestamp: Date.now()
+            }};
+            sendDataToServer(data);
+        }}
+
+        function sendDataToServer(data) {{
             try {{
                 tg.sendData(JSON.stringify(data));
-                showStatus(`✅ ${{name}} ${{value ? 'включены' : 'выключены'}}`, 'success');
+                console.log('📤 Data sent:', data);
             }} catch (error) {{
                 console.error('❌ Error sending data:', error);
                 showStatus('❌ Ошибка отправки данных', 'error');
@@ -479,7 +535,7 @@ def get_mini_app_html():
         }}
 
         setTimeout(() => {{
-            showStatus('🚀 Прямые API вызовы активны!', 'success');
+            showStatus('🎯 Система переменных активна!', 'success');
         }}, 1000);
     </script>
 </body>
@@ -497,7 +553,7 @@ def index():
 def group_settings():
     return Response(get_mini_app_html(), mimetype='text/html')
 
-# Простой вебхук для обработки данных от MiniApp
+# Вебхук для обработки всех действий
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if not BOT_TOKEN:
@@ -507,27 +563,82 @@ def webhook():
         data = request.get_json()
         print(f"📨 Received webhook data: {data}")
         
-        if data.get('action') == 'update_single_setting':
+        action = data.get('action')
+        chat_id = data.get('chat_id', GROUP_CHAT_ID)
+        
+        if action == 'update_setting':
+            # ОБНОВЛЯЕМ ПЕРЕМЕННУЮ И ПРИМЕНЯЕМ НАСТРОЙКИ
             setting = data.get('setting')
             value = data.get('value')
-            chat_id = data.get('chat_id', GROUP_CHAT_ID)
-            test_name = data.get('test_name', 'Настройка')
+            setting_name = data.get('setting_name', 'Настройка')
             
-            print(f"🔄 Processing: {setting} = {value} for chat {chat_id}")
+            print(f"🔄 UPDATE SETTING: {setting} = {value}")
             
-            # Используем прямые API вызовы
-            success = set_single_permission(chat_id, setting, value)
+            success = update_setting(setting, value)
             
             if success:
                 response = {
                     'ok': True,
-                    'message': f'{test_name} {"включены" if value else "выключены"}'
+                    'message': f'{setting_name} установлены в {value}',
+                    'current_settings': current_settings
                 }
             else:
                 response = {
                     'ok': False,
-                    'error': f'Не удалось изменить {test_name}'
+                    'error': f'Не удалось установить {setting_name}',
+                    'current_settings': current_settings
                 }
+            
+            return jsonify(response)
+            
+        elif action == 'load_settings':
+            # ЗАГРУЖАЕМ НАСТРОЙКИ ИЗ TELEGRAM
+            success = load_current_settings_from_telegram()
+            
+            if success:
+                response = {
+                    'ok': True,
+                    'message': 'Настройки загружены из Telegram',
+                    'current_settings': current_settings
+                }
+            else:
+                response = {
+                    'ok': False,
+                    'error': 'Не удалось загрузить настройки',
+                    'current_settings': current_settings
+                }
+            
+            return jsonify(response)
+            
+        elif action == 'apply_all_settings':
+            # ПРИМЕНЯЕМ ВСЕ ТЕКУЩИЕ НАСТРОЙКИ
+            success = apply_all_permissions()
+            
+            if success:
+                response = {
+                    'ok': True,
+                    'message': 'Все настройки применены',
+                    'current_settings': current_settings
+                }
+            else:
+                response = {
+                    'ok': False,
+                    'error': 'Не удалось применить настройки',
+                    'current_settings': current_settings
+                }
+            
+            return jsonify(response)
+            
+        elif action == 'test_all_settings':
+            # ТЕСТИРУЕМ ВСЕ НАСТРОЙКИ
+            results = test_all_settings()
+            
+            response = {
+                'ok': True,
+                'message': 'Тестирование завершено',
+                'results': results,
+                'current_settings': current_settings
+            }
             
             return jsonify(response)
         
@@ -541,33 +652,13 @@ def webhook():
 def check_user_access(user_id):
     return user_id == ALLOWED_USER_ID
 
-# Тестовый endpoint для проверки API
-@app.route('/api/test_permission', methods=['POST'])
-def api_test_permission():
-    """API endpoint для тестирования разрешений"""
-    try:
-        data = request.get_json()
-        permission = data.get('permission')
-        value = data.get('value', False)
-        
-        if not permission:
-            return jsonify({'ok': False, 'error': 'Permission required'})
-        
-        success = test_permission(permission, value)
-        
-        return jsonify({
-            'ok': success,
-            'permission': permission,
-            'value': value,
-            'message': f'Set {permission} to {value}'
-        })
-        
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)})
-
 if __name__ == '__main__':
-    print("🚀 Starting server with DIRECT API CALLS")
+    print("🚀 Starting server with VARIABLE-BASED SYSTEM")
     print(f"🎯 Target chat: {GROUP_CHAT_ID}")
+    print(f"📊 Initial settings: {current_settings}")
+    
+    # Загружаем текущие настройки при старте
+    load_current_settings_from_telegram()
     
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
