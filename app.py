@@ -173,6 +173,7 @@ def home():
                 transition: all 0.3s;
                 text-decoration: none;
                 display: inline-block;
+                margin: 10px 0;
             }
             .btn:hover {
                 background: #3a56e8;
@@ -186,6 +187,19 @@ def home():
                 border-radius: 10px;
                 margin-bottom: 20px;
             }
+            .auth-section {
+                margin: 25px 0;
+            }
+            .manual-auth {
+                margin-top: 20px;
+                padding-top: 20px;
+                border-top: 1px solid rgba(255,255,255,0.2);
+            }
+            .manual-auth p {
+                font-size: 14px;
+                margin-bottom: 15px;
+                opacity: 0.7;
+            }
         </style>
     </head>
     <body>
@@ -193,11 +207,20 @@ def home():
             <h1>🎛️ Donk Chat Settings</h1>
             <p>Для доступа к настройкам группы необходимо авторизоваться через Telegram</p>
             
-            <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                    data-telegram-login="donk_settings_bot" 
-                    data-size="large" 
-                    data-auth-url="/auth" 
-                    data-request-access="write"></script>
+            <div class="auth-section">
+                <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                        data-telegram-login="k0mbvt1ktestbot" 
+                        data-size="large" 
+                        data-auth-url="/auth" 
+                        data-request-access="write"></script>
+            </div>
+
+            <div class="manual-auth">
+                <p>Если кнопка выше не работает:</p>
+                <a href="https://t.me/k0mbvt1ktestbot?start=auth" class="btn">
+                    🔐 Авторизоваться в боте
+                </a>
+            </div>
             
             <p style="margin-top: 20px; font-size: 14px; opacity: 0.7;">
                 Доступ только для администраторов группы
