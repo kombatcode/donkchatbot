@@ -43,7 +43,9 @@ def apply_settings():
         'chat_id': GROUP_CHAT_ID,
         'permissions': current_settings
     }
-    return telegram_api('setChatPermissions', data)
+    result = telegram_api('setChatPermissions', data)
+    print(f"🎯 Apply settings result: {result}")
+    return result
 
 def update_setting(setting_name, value):
     """Обновляет настройку и применяет её"""
@@ -55,7 +57,10 @@ def get_current_settings():
     """Получает текущие настройки из Telegram"""
     result = telegram_api('getChat', {'chat_id': GROUP_CHAT_ID})
     if result.get('ok'):
-        return result['result'].get('permissions', {})
+        permissions = result['result'].get('permissions', {})
+        print(f"📋 Current Telegram settings: {permissions}")
+        return permissions
+    print("❌ Failed to get current settings from Telegram")
     return {}
 
 def sync_settings():
@@ -63,14 +68,16 @@ def sync_settings():
     global current_settings
     telegram_settings = get_current_settings()
     if telegram_settings:
-        for key in current_settings.keys():
+        # Обновляем только существующие ключи
+        for key in list(current_settings.keys()):
             if key in telegram_settings:
                 current_settings[key] = telegram_settings[key]
-        print(f"🔄 Synced: {current_settings}")
+        print(f"🔄 Synced settings: {current_settings}")
         return True
     return False
 
 # Загружаем настройки при старте
+print("🚀 Starting application...")
 sync_settings()
 
 @app.route('/')
@@ -127,7 +134,7 @@ def home():
 @app.route('/settings')
 def settings_page():
     """Главная страница настроек"""
-    return """
+    return f"""
     <!DOCTYPE html>
     <html lang="ru">
     <head>
@@ -136,58 +143,58 @@ def settings_page():
         <title>Настройки приложения</title>
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <style>
-            * {
+            * {{
                 margin: 0;
                 padding: 0;
                 box-sizing: border-box;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            }
+            }}
 
-            body {
+            body {{
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 min-height: 100vh;
                 padding: 20px;
                 display: flex;
                 justify-content: center;
                 align-items: center;
-            }
+            }}
 
-            .container {
+            .container {{
                 width: 100%;
                 max-width: 500px;
                 background: rgba(255, 255, 255, 0.95);
                 border-radius: 20px;
                 box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
                 overflow: hidden;
-            }
+            }}
 
-            .header {
+            .header {{
                 background: linear-gradient(90deg, #4f6df5, #3a56e8);
                 color: white;
                 padding: 25px 20px;
                 text-align: center;
-            }
+            }}
 
-            .header h1 {
+            .header h1 {{
                 font-size: 24px;
                 font-weight: 600;
                 margin-bottom: 5px;
-            }
+            }}
 
-            .header p {
+            .header p {{
                 opacity: 0.9;
                 font-size: 14px;
-            }
+            }}
 
-            .settings-container {
+            .settings-container {{
                 padding: 25px 20px;
-            }
+            }}
 
-            .section {
+            .section {{
                 margin-bottom: 30px;
-            }
+            }}
 
-            .section-title {
+            .section-title {{
                 font-size: 18px;
                 font-weight: 600;
                 color: #333;
@@ -197,63 +204,63 @@ def settings_page():
                 display: flex;
                 align-items: center;
                 gap: 10px;
-            }
+            }}
 
-            .setting-item {
+            .setting-item {{
                 margin-bottom: 20px;
                 padding: 15px;
                 background: #f8f9fa;
                 border-radius: 12px;
                 transition: all 0.3s ease;
-            }
+            }}
 
-            .setting-item:hover {
+            .setting-item:hover {{
                 transform: translateY(-2px);
                 box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            }
+            }}
 
-            .setting-header {
+            .setting-header {{
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 margin-bottom: 8px;
-            }
+            }}
 
-            .setting-title {
+            .setting-title {{
                 font-weight: 600;
                 color: #333;
                 font-size: 16px;
                 display: flex;
                 align-items: center;
                 gap: 10px;
-            }
+            }}
 
-            .setting-value {
+            .setting-value {{
                 font-weight: 600;
                 color: #4f6df5;
                 font-size: 14px;
-            }
+            }}
 
-            .setting-description {
+            .setting-description {{
                 color: #666;
                 font-size: 13px;
                 margin-top: 5px;
-            }
+            }}
 
-            .slider-container {
+            .slider-container {{
                 position: relative;
                 height: 30px;
                 display: flex;
                 align-items: center;
-            }
+            }}
 
-            .buttons {
+            .buttons {{
                 display: flex;
                 gap: 15px;
                 margin-top: 30px;
-            }
+            }}
 
-            .btn {
+            .btn {{
                 flex: 1;
                 padding: 15px;
                 border: none;
@@ -266,75 +273,75 @@ def settings_page():
                 justify-content: center;
                 align-items: center;
                 gap: 8px;
-            }
+            }}
 
-            .btn-primary {
+            .btn-primary {{
                 background: linear-gradient(90deg, #4f6df5, #3a56e8);
                 color: white;
                 box-shadow: 0 4px 12px rgba(79, 109, 245, 0.3);
-            }
+            }}
 
-            .btn-primary:hover {
+            .btn-primary:hover {{
                 transform: translateY(-2px);
                 box-shadow: 0 6px 15px rgba(79, 109, 245, 0.4);
-            }
+            }}
 
-            .btn-secondary {
+            .btn-secondary {{
                 background: #f5f5f5;
                 color: #666;
-            }
+            }}
 
-            .btn-secondary:hover {
+            .btn-secondary:hover {{
                 background: #e9e9e9;
-            }
+            }}
 
-            .status {
+            .status {{
                 text-align: center;
                 margin-top: 20px;
                 padding: 12px;
                 border-radius: 10px;
                 font-size: 14px;
                 display: none;
-            }
+            }}
 
-            .status.success {
+            .status.success {{
                 background: #e8f5e9;
                 color: #2e7d32;
                 display: block;
-            }
+            }}
 
-            .status.error {
+            .status.error {{
                 background: #ffebee;
                 color: #c62828;
                 display: block;
-            }
+            }}
 
-            .status.info {
+            .status.info {{
                 background: #e3f2fd;
                 color: #1565c0;
                 display: block;
-            }
+            }}
 
-            .icon {
+            .icon {{
                 width: 20px;
                 height: 20px;
-            }
+            }}
 
             /* Switch styles */
-            .switch {
+            .switch {{
                 position: relative;
                 display: inline-block;
                 width: 54px;
                 height: 32px;
-            }
+            }}
 
-            .switch input {
+            .switch input {{
                 opacity: 0;
                 width: 0;
                 height: 0;
-            }
+            }}
 
-            .switch-slider {
+            .switch-slider {{
                 position: absolute;
                 cursor: pointer;
                 top: 0;
@@ -344,9 +351,9 @@ def settings_page():
                 background-color: #ccc;
                 transition: .4s;
                 border-radius: 32px;
-            }
+            }}
 
-            .switch-slider:before {
+            .switch-slider:before {{
                 position: absolute;
                 content: "";
                 height: 26px;
@@ -356,19 +363,19 @@ def settings_page():
                 background-color: white;
                 transition: .4s;
                 border-radius: 50%;
-            }
+            }}
 
-            input:checked + .switch-slider {
+            input:checked + .switch-slider {{
                 background-color: #4f6df5;
-            }
+            }}
 
-            input:checked + .switch-slider:before {
+            input:checked + .switch-slider:before {{
                 transform: translateX(22px);
-            }
+            }}
 
-            .emoji {
+            .emoji {{
                 font-size: 18px;
-            }
+            }}
         </style>
     </head>
     <body>
@@ -611,49 +618,34 @@ def settings_page():
 
         <script>
             // Текущие настройки
-            let currentSettings = {};
+            let currentSettings = {json.dumps(current_settings)};
 
             // Загружаем настройки при загрузке страницы
-            document.addEventListener('DOMContentLoaded', function() {
-                loadSettings();
-            });
+            document.addEventListener('DOMContentLoaded', function() {{
+                console.log('Initial settings:', currentSettings);
+                updateUI(currentSettings);
+                showStatus('✅ Настройки загружены', 'success');
+            }});
 
-            function loadSettings() {
-                fetch('/api/settings')
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Network response was not ok');
-                        }
-                        return response.json();
-                    })
-                    .then(settings => {
-                        currentSettings = settings;
-                        updateUI(settings);
-                        showStatus('✅ Настройки загружены', 'success');
-                    })
-                    .catch(error => {
-                        console.error('Error loading settings:', error);
-                        showStatus('❌ Ошибка загрузки настроек', 'error');
-                    });
-            }
-
-            function updateUI(settings) {
+            function updateUI(settings) {{
+                console.log('Updating UI with settings:', settings);
+                
                 // Основные разрешения
-                document.getElementById('can_send_messages').checked = settings.can_send_messages;
-                document.getElementById('can_send_polls').checked = settings.can_send_polls;
+                document.getElementById('can_send_messages').checked = settings.can_send_messages || false;
+                document.getElementById('can_send_polls').checked = settings.can_send_polls || false;
                 
                 // Медиафайлы
-                document.getElementById('can_send_media_messages').checked = settings.can_send_media_messages;
-                document.getElementById('can_send_photos').checked = settings.can_send_photos;
-                document.getElementById('can_send_videos').checked = settings.can_send_videos;
-                document.getElementById('can_send_video_notes').checked = settings.can_send_video_notes;
-                document.getElementById('can_send_voice_notes').checked = settings.can_send_voice_notes;
-                document.getElementById('can_send_stickers').checked = settings.can_send_stickers;
+                document.getElementById('can_send_media_messages').checked = settings.can_send_media_messages || false;
+                document.getElementById('can_send_photos').checked = settings.can_send_photos || false;
+                document.getElementById('can_send_videos').checked = settings.can_send_videos || false;
+                document.getElementById('can_send_video_notes').checked = settings.can_send_video_notes || false;
+                document.getElementById('can_send_voice_notes').checked = settings.can_send_voice_notes || false;
+                document.getElementById('can_send_stickers').checked = settings.can_send_stickers || false;
                 
                 // Управление группой
-                document.getElementById('can_change_info').checked = settings.can_change_info;
-                document.getElementById('can_invite_users').checked = settings.can_invite_users;
-                document.getElementById('can_pin_messages').checked = settings.can_pin_messages;
+                document.getElementById('can_change_info').checked = settings.can_change_info || false;
+                document.getElementById('can_invite_users').checked = settings.can_invite_users || false;
+                document.getElementById('can_pin_messages').checked = settings.can_pin_messages || false;
                 
                 // Обновляем статусы
                 document.getElementById('messages_status').textContent = settings.can_send_messages ? 'ON' : 'OFF';
@@ -667,112 +659,116 @@ def settings_page():
                 document.getElementById('info_status').textContent = settings.can_change_info ? 'ON' : 'OFF';
                 document.getElementById('invite_status').textContent = settings.can_invite_users ? 'ON' : 'OFF';
                 document.getElementById('pin_status').textContent = settings.can_pin_messages ? 'ON' : 'OFF';
-            }
+            }}
 
-            function toggleSetting(setting, value, statusElement) {
+            function toggleSetting(setting, value, statusElement) {{
+                console.log('Toggling setting:', setting, 'to:', value);
                 showStatus('🔄 Изменение настроек...', 'info');
                 
-                fetch('/api/update', {
+                fetch('/api/update', {{
                     method: 'POST',
-                    headers: {
+                    headers: {{
                         'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
+                    }},
+                    body: JSON.stringify({{
                         setting: setting,
                         value: value
-                    })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
+                    }})
+                }})
+                .then(response => {{
+                    if (!response.ok) {{
+                        throw new Error('Network response was not ok: ' + response.status);
+                    }}
                     return response.json();
-                })
-                .then(result => {
-                    if (result.success) {
+                }})
+                .then(result => {{
+                    console.log('Update result:', result);
+                    if (result.success) {{
                         currentSettings = result.settings;
                         updateUI(currentSettings);
                         showStatus('✅ Настройка применена!', 'success');
-                    } else {
+                    }} else {{
                         showStatus('❌ Ошибка: ' + result.error, 'error');
                         // Возвращаем переключатель в предыдущее состояние
                         document.getElementById(setting).checked = !value;
                         document.getElementById(statusElement).textContent = !value ? 'ON' : 'OFF';
-                    }
-                })
-                .catch(error => {
+                    }}
+                }})
+                .catch(error => {{
                     console.error('Error updating setting:', error);
-                    showStatus('❌ Ошибка сети', 'error');
+                    showStatus('❌ Ошибка сети: ' + error.message, 'error');
                     // Возвращаем переключатель в предыдущее состояние
                     document.getElementById(setting).checked = !value;
                     document.getElementById(statusElement).textContent = !value ? 'ON' : 'OFF';
-                });
-            }
+                }});
+            }}
 
-            function syncSettings() {
+            function syncSettings() {{
                 showStatus('🔄 Синхронизация с Telegram...', 'info');
                 
                 fetch('/api/sync')
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Network response was not ok');
-                        }
+                    .then(response => {{
+                        if (!response.ok) {{
+                            throw new Error('Network response was not ok: ' + response.status);
+                        }}
                         return response.json();
-                    })
-                    .then(result => {
-                        if (result.success) {
+                    }})
+                    .then(result => {{
+                        console.log('Sync result:', result);
+                        if (result.success) {{
                             currentSettings = result.settings;
                             updateUI(currentSettings);
                             showStatus('✅ Настройки синхронизированы!', 'success');
-                        } else {
-                            showStatus('❌ Ошибка синхронизации', 'error');
-                        }
-                    })
-                    .catch(error => {
+                        }} else {{
+                            showStatus('❌ Ошибка синхронизации: ' + result.message, 'error');
+                        }}
+                    }})
+                    .catch(error => {{
                         console.error('Error syncing settings:', error);
-                        showStatus('❌ Ошибка сети при синхронизации', 'error');
-                    });
-            }
+                        showStatus('❌ Ошибка сети при синхронизации: ' + error.message, 'error');
+                    }});
+            }}
 
-            function applyAllSettings() {
+            function applyAllSettings() {{
                 showStatus('🎯 Применение всех настроек...', 'info');
                 
                 fetch('/api/apply')
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Network response was not ok');
-                        }
+                    .then(response => {{
+                        if (!response.ok) {{
+                            throw new Error('Network response was not ok: ' + response.status);
+                        }}
                         return response.json();
-                    })
-                    .then(result => {
-                        if (result.success) {
+                    }})
+                    .then(result => {{
+                        console.log('Apply result:', result);
+                        if (result.success) {{
                             showStatus('✅ Все настройки применены!', 'success');
-                        } else {
-                            showStatus('❌ Ошибка применения настроек', 'error');
-                        }
-                    })
-                    .catch(error => {
+                        }} else {{
+                            showStatus('❌ Ошибка применения настроек: ' + result.message, 'error');
+                        }}
+                    }})
+                    .catch(error => {{
                         console.error('Error applying settings:', error);
-                        showStatus('❌ Ошибка сети', 'error');
-                    });
-            }
+                        showStatus('❌ Ошибка сети: ' + error.message, 'error');
+                    }});
+            }}
 
-            function showStatus(message, type) {
+            function showStatus(message, type) {{
                 const status = document.getElementById('status');
                 status.textContent = message;
                 status.className = 'status ' + type;
                 status.style.display = 'block';
                 
-                setTimeout(() => {
+                setTimeout(() => {{
                     status.style.display = 'none';
-                }, 3000);
-            }
+                }}, 3000);
+            }}
 
             // Инициализация Telegram Web App
-            if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+            if (typeof Telegram !== 'undefined' && Telegram.WebApp) {{
                 Telegram.WebApp.ready();
                 Telegram.WebApp.expand();
-            }
+            }}
         </script>
     </body>
     </html>
@@ -782,6 +778,7 @@ def settings_page():
 @app.route('/api/settings')
 def api_get_settings():
     """Возвращает текущие настройки"""
+    print(f"📊 API: Getting current settings: {current_settings}")
     return jsonify(current_settings)
 
 @app.route('/api/update', methods=['POST'])
@@ -792,31 +789,38 @@ def api_update_setting():
         setting = data.get('setting')
         value = data.get('value')
         
+        print(f"🔄 API: Updating {setting} to {value}")
+        
         if setting not in current_settings:
+            print(f"❌ API: Invalid setting: {setting}")
             return jsonify({'success': False, 'error': 'Invalid setting'})
         
         result = update_setting(setting, value)
         
         if result.get('ok'):
+            print(f"✅ API: Successfully updated {setting}")
             return jsonify({
                 'success': True, 
                 'settings': current_settings,
                 'message': f'{setting} set to {value}'
             })
         else:
+            print(f"❌ API: Telegram API error for {setting}")
             return jsonify({
                 'success': False, 
-                'error': 'Telegram API error',
+                'error': 'Telegram API error: ' + str(result.get('description', 'Unknown error')),
                 'settings': current_settings
             })
             
     except Exception as e:
+        print(f"❌ API: Exception: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/sync')
 def api_sync_settings():
     """Синхронизирует настройки с Telegram"""
     try:
+        print("🔄 API: Syncing settings with Telegram")
         success = sync_settings()
         return jsonify({
             'success': success,
@@ -824,19 +828,22 @@ def api_sync_settings():
             'message': 'Settings synced' if success else 'Sync failed'
         })
     except Exception as e:
+        print(f"❌ API: Sync exception: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/apply')
 def api_apply_settings():
     """Применяет все текущие настройки"""
     try:
+        print("🎯 API: Applying all settings")
         result = apply_settings()
         return jsonify({
             'success': result.get('ok', False),
             'settings': current_settings,
-            'message': 'Settings applied' if result.get('ok') else 'Apply failed'
+            'message': 'Settings applied' if result.get('ok') else 'Apply failed: ' + str(result.get('description', 'Unknown error'))
         })
     except Exception as e:
+        print(f"❌ API: Apply exception: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
@@ -844,6 +851,7 @@ if __name__ == '__main__':
     print(f"🎯 Group: {GROUP_CHAT_ID}")
     print(f"👥 Allowed users: {ALLOWED_USER_IDS}")
     print(f"📊 Initial settings: {current_settings}")
+    print(f"🔑 BOT_TOKEN: {'Set' if BOT_TOKEN else 'Not set!'}")
     
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
