@@ -902,10 +902,8 @@ def bot_webhook():
             
             # Проверяем доступ
             if user_id not in ALLOWED_USER_IDS:
-                telegram_api('sendMessage', {
-                    'chat_id': chat_id,
-                    'text': '🚫 У вас нет доступа к настройкам группы'
-                })
+                # Не отправляем сообщение - просто логируем
+                print(f"🚫 Access denied for user {user_id}")
                 return 'OK'
             
             # Обрабатываем команды
@@ -915,6 +913,7 @@ def bot_webhook():
                 if text == '/start' or text == '/settings':
                     webapp_url = f"https://{request.host}/settings"
                     
+                    # Отправляем сообщение с кнопкой для открытия мини-приложения
                     telegram_api('sendMessage', {
                         'chat_id': chat_id,
                         'text': '🎛️ *Donk Chat Settings*\n\nУправление настройками группы',
