@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, Response
-import telebot
+import requests
 import os
 import json
 import time
@@ -9,35 +9,52 @@ app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 ALLOWED_USER_ID = 1444832263
-GROUP_CHAT_ID = -1001721934457 
+GROUP_CHAT_ID = -1001721934457
 
-if BOT_TOKEN:
-    bot = telebot.TeleBot(BOT_TOKEN)
-else:
-    bot = None
-
-# Кэш для хранения последних настроек
-settings_cache = {}
-CACHE_TIMEOUT = 30
-
-def get_current_group_settings(chat_id):
-    """Получает актуальные настройки группы из Telegram"""
-    global settings_cache
-    
-    cache_key = f"settings_{chat_id}"
-    if cache_key in settings_cache:
-        cached_data, timestamp = settings_cache[cache_key]
-        if time.time() - timestamp < CACHE_TIMEOUT:
-            return cached_data
-    
+# Прямые API вызовы к Telegram
+def telegram_api(method, data):
+    """Прямой вызов Telegram Bot API"""
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
     try:
-        print(f"🔍 Getting fresh settings for chat: {chat_id}")
+        response = requests.post(url, json=data, timeout=10)
+        result = response.json()
+        print(f"📡 API {method}: {result.get('ok', False)}")
+        if not result.get('ok'):
+            print(f"❌ API Error: {result}")
+        return result
+    except Exception as e:
+        print(f"❌ API Request failed: {e}")
+        return {'ok': False, 'error': str(e)}
+
+def get_chat_info(chat_id):
+    """Получает информацию о чате"""
+    return telegram_api('getChat', {'chat_id': chat_id})
+
+def get_chat_permissions(chat_id):
+    """Получает текущие разрешения чата"""
+    chat_info = get_chat_info(chat_id)
+    if chat_info.get('ok'):
+        return chat_info['result'].get('permissions', {})
+    return {}
+
+def set_chat_permissions_direct(chat_id, permissions):
+    """Устанавливает разрешения чата напрямую через API"""
+    data = {
+        'chat_id': chat_id,
+        'permissions': permissions
+    }
+    return telegram_api('setChatPermissions', data)
+
+def set_single_permission(chat_id, permission_name, value):
+    """Устанавливает одно разрешение, сохраняя остальные"""
+    try:
+        # Получаем текущие разрешения
+        current_permissions = get_chat_permissions(chat_id)
+        print(f"🔍 Current permissions: {current_permissions}")
         
-        chat = bot.get_chat(chat_id)
-        permissions = chat.permissions
-        
-        if permissions is None:
-            settings = {
+        if not current_permissions:
+            # Если не удалось получить, используем дефолтные
+            current_permissions = {
                 'can_send_messages': True,
                 'can_send_media_messages': True,
                 'can_send_polls': True,
@@ -45,213 +62,46 @@ def get_current_group_settings(chat_id):
                 'can_invite_users': True,
                 'can_pin_messages': False
             }
+        
+        # Обновляем только нужное разрешение
+        current_permissions[permission_name] = value
+        print(f"🔄 New permissions: {current_permissions}")
+        
+        # Устанавливаем обновленные разрешения
+        result = set_chat_permissions_direct(chat_id, current_permissions)
+        
+        if result.get('ok'):
+            print(f"✅ Successfully set {permission_name} to {value}")
+            return True
         else:
-            settings = {
-                'can_send_messages': getattr(permissions, 'can_send_messages', True),
-                'can_send_media_messages': getattr(permissions, 'can_send_media_messages', True),
-                'can_send_polls': getattr(permissions, 'can_send_polls', True),
-                'can_change_info': getattr(permissions, 'can_change_info', False),
-                'can_invite_users': getattr(permissions, 'can_invite_users', True),
-                'can_pin_messages': getattr(permissions, 'can_pin_messages', False)
-            }
-        
-        print(f"✅ Current settings: {settings}")
-        settings_cache[cache_key] = (settings, time.time())
-        return settings
-        
+            print(f"❌ Failed to set {permission_name}: {result}")
+            return False
+            
     except Exception as e:
-        print(f"❌ Error getting settings: {str(e)}")
-        return None
-
-def check_bot_permissions(chat_id):
-    """Проверяет права бота в группе"""
-    try:
-        bot_member = bot.get_chat_member(chat_id, bot.get_me().id)
-        return bot_member.status == 'administrator'
-    except Exception as e:
-        print(f"❌ Error checking bot permissions: {e}")
+        print(f"❌ Error in set_single_permission: {e}")
         return False
 
-# ОТДЕЛЬНЫЕ ФУНКЦИИ ДЛЯ КАЖДОГО ПЕРЕКЛЮЧАТЕЛЯ
-def set_send_messages(chat_id, enabled):
-    """Устанавливает разрешение на отправку сообщений"""
-    try:
-        from telebot.types import ChatPermissions
-        
-        # Получаем текущие настройки
-        current = get_current_group_settings(chat_id) or {}
-        
-        permissions = ChatPermissions(
-            can_send_messages=enabled,
-            can_send_media_messages=current.get('can_send_media_messages', True),
-            can_send_polls=current.get('can_send_polls', True),
-            can_change_info=current.get('can_change_info', False),
-            can_invite_users=current.get('can_invite_users', True),
-            can_pin_messages=current.get('can_pin_messages', False)
-        )
-        
-        result = bot.set_chat_permissions(chat_id, permissions)
-        print(f"✅ Set send_messages to {enabled}: {result}")
-        return True
-    except Exception as e:
-        print(f"❌ Error setting send_messages: {e}")
-        return False
-
-def set_send_media(chat_id, enabled):
-    """Устанавливает разрешение на отправку медиа"""
-    try:
-        from telebot.types import ChatPermissions
-        
-        current = get_current_group_settings(chat_id) or {}
-        
-        permissions = ChatPermissions(
-            can_send_messages=current.get('can_send_messages', True),
-            can_send_media_messages=enabled,
-            can_send_polls=current.get('can_send_polls', True),
-            can_change_info=current.get('can_change_info', False),
-            can_invite_users=current.get('can_invite_users', True),
-            can_pin_messages=current.get('can_pin_messages', False)
-        )
-        
-        result = bot.set_chat_permissions(chat_id, permissions)
-        print(f"✅ Set send_media to {enabled}: {result}")
-        return True
-    except Exception as e:
-        print(f"❌ Error setting send_media: {e}")
-        return False
-
-def set_send_polls(chat_id, enabled):
-    """Устанавливает разрешение на создание опросов"""
-    try:
-        from telebot.types import ChatPermissions
-        
-        current = get_current_group_settings(chat_id) or {}
-        
-        permissions = ChatPermissions(
-            can_send_messages=current.get('can_send_messages', True),
-            can_send_media_messages=current.get('can_send_media_messages', True),
-            can_send_polls=enabled,
-            can_change_info=current.get('can_change_info', False),
-            can_invite_users=current.get('can_invite_users', True),
-            can_pin_messages=current.get('can_pin_messages', False)
-        )
-        
-        result = bot.set_chat_permissions(chat_id, permissions)
-        print(f"✅ Set send_polls to {enabled}: {result}")
-        return True
-    except Exception as e:
-        print(f"❌ Error setting send_polls: {e}")
-        return False
-
-def set_change_info(chat_id, enabled):
-    """Устанавливает разрешение на изменение информации"""
-    try:
-        from telebot.types import ChatPermissions
-        
-        current = get_current_group_settings(chat_id) or {}
-        
-        permissions = ChatPermissions(
-            can_send_messages=current.get('can_send_messages', True),
-            can_send_media_messages=current.get('can_send_media_messages', True),
-            can_send_polls=current.get('can_send_polls', True),
-            can_change_info=enabled,
-            can_invite_users=current.get('can_invite_users', True),
-            can_pin_messages=current.get('can_pin_messages', False)
-        )
-        
-        result = bot.set_chat_permissions(chat_id, permissions)
-        print(f"✅ Set change_info to {enabled}: {result}")
-        return True
-    except Exception as e:
-        print(f"❌ Error setting change_info: {e}")
-        return False
-
-def set_invite_users(chat_id, enabled):
-    """Устанавливает разрешение на приглашение пользователей"""
-    try:
-        from telebot.types import ChatPermissions
-        
-        current = get_current_group_settings(chat_id) or {}
-        
-        permissions = ChatPermissions(
-            can_send_messages=current.get('can_send_messages', True),
-            can_send_media_messages=current.get('can_send_media_messages', True),
-            can_send_polls=current.get('can_send_polls', True),
-            can_change_info=current.get('can_change_info', False),
-            can_invite_users=enabled,
-            can_pin_messages=current.get('can_pin_messages', False)
-        )
-        
-        result = bot.set_chat_permissions(chat_id, permissions)
-        print(f"✅ Set invite_users to {enabled}: {result}")
-        return True
-    except Exception as e:
-        print(f"❌ Error setting invite_users: {e}")
-        return False
-
-def set_pin_messages(chat_id, enabled):
-    """Устанавливает разрешение на закрепление сообщений"""
-    try:
-        from telebot.types import ChatPermissions
-        
-        current = get_current_group_settings(chat_id) or {}
-        
-        permissions = ChatPermissions(
-            can_send_messages=current.get('can_send_messages', True),
-            can_send_media_messages=current.get('can_send_media_messages', True),
-            can_send_polls=current.get('can_send_polls', True),
-            can_change_info=current.get('can_change_info', False),
-            can_invite_users=current.get('can_invite_users', True),
-            can_pin_messages=enabled
-        )
-        
-        result = bot.set_chat_permissions(chat_id, permissions)
-        print(f"✅ Set pin_messages to {enabled}: {result}")
-        return True
-    except Exception as e:
-        print(f"❌ Error setting pin_messages: {e}")
-        return False
-
-# Функции для быстрого тестирования каждого параметра
-def test_all_permissions():
-    """Тестирует все разрешения по очереди"""
-    tests = [
-        ("💬 Сообщения", set_send_messages, False),
-        ("🖼️ Медиа", set_send_media, False),
-        ("📊 Опроcы", set_send_polls, False),
-        ("✏️ Изменение инфо", set_change_info, True),
-        ("👥 Приглашения", set_invite_users, True),
-        ("📌 Закрепление", set_pin_messages, True)
-    ]
-    
-    results = []
-    for name, func, default_value in tests:
-        try:
-            success = func(GROUP_CHAT_ID, default_value)
-            results.append(f"{name}: {'✅' if success else '❌'}")
-            time.sleep(2)  # Ждем между запросами
-        except Exception as e:
-            results.append(f"{name}: ❌ ({str(e)})")
-    
-    return results
+def test_permission(permission_name, value):
+    """Тестирует установку конкретного разрешения"""
+    print(f"🧪 Testing {permission_name} = {value}")
+    return set_single_permission(GROUP_CHAT_ID, permission_name, value)
 
 def get_mini_app_html():
     """Генерирует HTML с текущими настройками группы"""
-    current_settings = {}
-    bot_has_access = False
+    current_permissions = {}
     
     if BOT_TOKEN:
-        bot_has_access = check_bot_permissions(GROUP_CHAT_ID)
-        if bot_has_access:
-            current_settings = get_current_group_settings(GROUP_CHAT_ID)
+        current_permissions = get_chat_permissions(GROUP_CHAT_ID)
+        print(f"📊 Current permissions for HTML: {current_permissions}")
     
-    settings = current_settings if current_settings else {
-        'can_send_messages': True,
-        'can_send_media_messages': True,
-        'can_send_polls': True,
-        'can_change_info': False,
-        'can_invite_users': True,
-        'can_pin_messages': False
+    # Значения по умолчанию
+    settings = {
+        'can_send_messages': current_permissions.get('can_send_messages', True),
+        'can_send_media_messages': current_permissions.get('can_send_media_messages', True),
+        'can_send_polls': current_permissions.get('can_send_polls', True),
+        'can_change_info': current_permissions.get('can_change_info', False),
+        'can_invite_users': current_permissions.get('can_invite_users', True),
+        'can_pin_messages': current_permissions.get('can_pin_messages', False)
     }
     
     return f'''
@@ -402,6 +252,21 @@ def get_mini_app_html():
             padding-bottom: 8px;
             border-bottom: 2px solid #007aff;
         }}
+        .test-buttons {{
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }}
+        .test-btn {{
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }}
     </style>
 </head>
 <body>
@@ -409,12 +274,19 @@ def get_mini_app_html():
         <div class="permissions-info">
             <h3>⚙️ Управление настройками Donk Chat</h3>
             <p><strong>ID группы:</strong> {GROUP_CHAT_ID}</p>
-            {"<p class='success'>✅ Бот имеет права управления</p>" if bot_has_access else "<p class='error'>❌ Бот не имеет прав</p>"}
+            <p><strong>Метод:</strong> Прямые API вызовы</p>
             <button class="refresh-btn" onclick="loadCurrentSettings()">🔄 Обновить настройки</button>
         </div>
 
         <div class="debug-info">
-            🎯 <strong>Индивидуальные функции</strong> - каждый ползунок работает отдельно
+            🚀 <strong>ПРЯМЫЕ API ВЫЗОВЫ</strong> - обход pyTelegramBotAPI
+        </div>
+
+        <div class="test-buttons">
+            <button class="test-btn" onclick="testPermission('can_send_messages', false)">🧪 Выкл сообщения</button>
+            <button class="test-btn" onclick="testPermission('can_send_media_messages', false)">🧪 Выкл медиа</button>
+            <button class="test-btn" onclick="testPermission('can_send_polls', false)">🧪 Выкл опросы</button>
+            <button class="test-btn" onclick="testAllPermissions()">🧪 Тест всех</button>
         </div>
         
         <div class="section-title">💬 Основные разрешения</div>
@@ -526,6 +398,27 @@ def get_mini_app_html():
             sendSettingUpdate('can_pin_messages', enabled, '📌 Закрепление');
         }}
 
+        // ТЕСТОВЫЕ ФУНКЦИИ
+        function testPermission(permission, value) {{
+            sendSettingUpdate(permission, value, `🧪 Тест ${{permission}}`);
+        }}
+
+        function testAllPermissions() {{
+            const tests = [
+                ['can_send_messages', false, '💬 Сообщения'],
+                ['can_send_media_messages', false, '🖼️ Медиа'],
+                ['can_send_polls', false, '📊 Опроcы']
+            ];
+            
+            showStatus('🧪 Запуск тестов...', 'warning');
+            
+            tests.forEach(([permission, value, name], index) => {{
+                setTimeout(() => {{
+                    sendSettingUpdate(permission, value, name);
+                }}, index * 2000);
+            }});
+        }}
+
         function sendSettingUpdate(setting, value, name) {{
             console.log(`📤 Setting ${{setting}} to ${{value}}`);
             
@@ -534,7 +427,8 @@ def get_mini_app_html():
                 setting: setting,
                 value: value,
                 chat_id: {GROUP_CHAT_ID},
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                test_name: name
             }};
             
             try {{
@@ -585,7 +479,7 @@ def get_mini_app_html():
         }}
 
         setTimeout(() => {{
-            showStatus('👋 Готов к работе! Измените настройки', 'success');
+            showStatus('🚀 Прямые API вызовы активны!', 'success');
         }}, 1000);
     </script>
 </body>
@@ -603,112 +497,77 @@ def index():
 def group_settings():
     return Response(get_mini_app_html(), mimetype='text/html')
 
+# Простой вебхук для обработки данных от MiniApp
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if not BOT_TOKEN:
-        return 'Bot token not set', 400
+        return jsonify({'ok': False, 'error': 'Bot token not set'}), 400
         
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return ''
-    return 'Error', 403
+    try:
+        data = request.get_json()
+        print(f"📨 Received webhook data: {data}")
+        
+        if data.get('action') == 'update_single_setting':
+            setting = data.get('setting')
+            value = data.get('value')
+            chat_id = data.get('chat_id', GROUP_CHAT_ID)
+            test_name = data.get('test_name', 'Настройка')
+            
+            print(f"🔄 Processing: {setting} = {value} for chat {chat_id}")
+            
+            # Используем прямые API вызовы
+            success = set_single_permission(chat_id, setting, value)
+            
+            if success:
+                response = {
+                    'ok': True,
+                    'message': f'{test_name} {"включены" if value else "выключены"}'
+                }
+            else:
+                response = {
+                    'ok': False,
+                    'error': f'Не удалось изменить {test_name}'
+                }
+            
+            return jsonify(response)
+        
+        return jsonify({'ok': False, 'error': 'Unknown action'})
+        
+    except Exception as e:
+        print(f"❌ Webhook error: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
+# Простая проверка прав
 def check_user_access(user_id):
     return user_id == ALLOWED_USER_ID
 
-# Обработчики бота
-if BOT_TOKEN:
-    @bot.message_handler(commands=['start', 'settings'])
-    def handle_settings(message):
-        if not check_user_access(message.from_user.id):
-            bot.send_message(message.chat.id, "🚫 Access Denied")
-            return
+# Тестовый endpoint для проверки API
+@app.route('/api/test_permission', methods=['POST'])
+def api_test_permission():
+    """API endpoint для тестирования разрешений"""
+    try:
+        data = request.get_json()
+        permission = data.get('permission')
+        value = data.get('value', False)
         
-        from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-        markup = InlineKeyboardMarkup()
-        web_app_button = InlineKeyboardButton(
-            "⚙️ Настройки группы", 
-            web_app=telebot.types.WebAppInfo(url="https://donkchatbot.onrender.com/group_settings.html")
-        )
-        markup.add(web_app_button)
+        if not permission:
+            return jsonify({'ok': False, 'error': 'Permission required'})
         
-        bot.send_message(message.chat.id, "🎛️ Панель управления настройками Donk Chat", reply_markup=markup)
-
-    @bot.message_handler(commands=['test_individual'])
-    def test_individual_permissions(message):
-        """Тестирует все разрешения по отдельности"""
-        try:
-            bot.send_message(message.chat.id, "🧪 Тестирую все разрешения...")
-            
-            results = test_all_permissions()
-            result_text = "🧪 Результаты тестирования:\n\n" + "\n".join(results)
-            
-            bot.send_message(message.chat.id, result_text)
-            
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Ошибка тестирования: {str(e)}")
-
-    @bot.message_handler(content_types=['web_app_data'])
-    def handle_web_app_data(message):
-        if not check_user_access(message.from_user.id):
-            bot.send_message(message.chat.id, "🚫 Access Denied")
-            return
-            
-        try:
-            data = json.loads(message.web_app_data.data)
-            print(f"📨 Received data: {data}")
-            
-            if data.get('action') == 'update_single_setting':
-                setting = data.get('setting')
-                value = data.get('value')
-                chat_id = data.get('chat_id', GROUP_CHAT_ID)
-                
-                print(f"🔄 Processing single setting: {setting} = {value}")
-                
-                # Проверяем права
-                if not check_bot_permissions(chat_id):
-                    bot.send_message(message.chat.id, "❌ У бота нет прав")
-                    return
-                
-                # ВЫЗЫВАЕМ ОТДЕЛЬНУЮ ФУНКЦИЮ ДЛЯ КАЖДОЙ НАСТРОЙКИ
-                success = False
-                setting_names = {
-                    'can_send_messages': ('💬 Сообщения', set_send_messages),
-                    'can_send_media_messages': ('🖼️ Медиа', set_send_media),
-                    'can_send_polls': ('📊 Опроcы', set_send_polls),
-                    'can_change_info': ('✏️ Изменение инфо', set_change_info),
-                    'can_invite_users': ('👥 Приглашения', set_invite_users),
-                    'can_pin_messages': ('📌 Закрепление', set_pin_messages)
-                }
-                
-                if setting in setting_names:
-                    name, func = setting_names[setting]
-                    success = func(chat_id, value)
-                    
-                    if success:
-                        status = "включены" if value else "выключены"
-                        bot.send_message(message.chat.id, f"✅ {name} {status}")
-                    else:
-                        bot.send_message(message.chat.id, f"❌ Не удалось изменить {name}")
-                else:
-                    bot.send_message(message.chat.id, f"❌ Неизвестная настройка: {setting}")
-                
-        except Exception as e:
-            print(f"❌ Web app error: {e}")
-            bot.send_message(message.chat.id, f"❌ Ошибка: {str(e)}")
+        success = test_permission(permission, value)
+        
+        return jsonify({
+            'ok': success,
+            'permission': permission,
+            'value': value,
+            'message': f'Set {permission} to {value}'
+        })
+        
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
 
 if __name__ == '__main__':
-    if BOT_TOKEN:
-        try:
-            bot.remove_webhook()
-            bot.set_webhook(url="https://donkchatbot.onrender.com/webhook")
-            print("✅ Webhook set successfully")
-            print(f"🎯 Target chat: {GROUP_CHAT_ID}")
-            print("🔧 INDIVIDUAL FUNCTIONS MODE - каждый ползунок работает отдельно")
-        except Exception as e:
-            print(f"⚠️ Webhook setup failed: {e}")
+    print("🚀 Starting server with DIRECT API CALLS")
+    print(f"🎯 Target chat: {GROUP_CHAT_ID}")
     
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
