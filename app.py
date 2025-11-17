@@ -1,24 +1,18 @@
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify
 import requests
 import os
 import json
-import time
 
 app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
-ALLOWED_USER_IDS = [1444832263, 848736128]  # Добавлен новый ID
+ALLOWED_USER_IDS = [1444832263, 848736128]
 GROUP_CHAT_ID = -1001721934457
 
 # Текущие настройки в памяти
 current_settings = {
     'can_send_messages': True,
     'can_send_media_messages': True,
-    'can_send_photos': True,
-    'can_send_videos': True,
-    'can_send_video_notes': True,
-    'can_send_voice_notes': True,
-    'can_send_stickers': True,
     'can_send_polls': True,
     'can_change_info': False,
     'can_invite_users': True,
@@ -42,19 +36,7 @@ def apply_settings():
     """Применяет текущие настройки к группе"""
     data = {
         'chat_id': GROUP_CHAT_ID,
-        'permissions': {
-            'can_send_messages': current_settings['can_send_messages'],
-            'can_send_media_messages': current_settings['can_send_media_messages'],
-            'can_send_photos': current_settings['can_send_photos'],
-            'can_send_videos': current_settings['can_send_videos'],
-            'can_send_video_notes': current_settings['can_send_video_notes'],
-            'can_send_voice_notes': current_settings['can_send_voice_notes'],
-            'can_send_stickers': current_settings['can_send_stickers'],
-            'can_send_polls': current_settings['can_send_polls'],
-            'can_change_info': current_settings['can_change_info'],
-            'can_invite_users': current_settings['can_invite_users'],
-            'can_pin_messages': current_settings['can_pin_messages']
-        }
+        'permissions': current_settings
     }
     return telegram_api('setChatPermissions', data)
 
@@ -68,9 +50,7 @@ def get_current_settings():
     """Получает текущие настройки из Telegram"""
     result = telegram_api('getChat', {'chat_id': GROUP_CHAT_ID})
     if result.get('ok'):
-        permissions = result['result'].get('permissions', {})
-        print(f"📋 Current Telegram settings: {permissions}")
-        return permissions
+        return result['result'].get('permissions', {})
     return {}
 
 def sync_settings():
@@ -90,7 +70,6 @@ sync_settings()
 
 @app.route('/')
 def home():
-    """Главная страница - только для Telegram"""
     return """
     <!DOCTYPE html>
     <html>
@@ -99,7 +78,7 @@ def home():
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
             body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-family: Arial, sans-serif;
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -123,6 +102,10 @@ def home():
                 opacity: 0.8;
                 margin-bottom: 20px;
             }
+            a {
+                color: white;
+                text-decoration: underline;
+            }
         </style>
     </head>
     <body>
@@ -130,6 +113,7 @@ def home():
             <h1>🎛️ Donk Chat Settings</h1>
             <p>Этот интерфейс работает только через Telegram</p>
             <p>Откройте через бота командой /settings</p>
+            <p><a href="/settings">Перейти к настройкам</a></p>
         </div>
     </body>
     </html>
@@ -137,152 +121,183 @@ def home():
 
 @app.route('/settings')
 def settings_page():
-    """Страница настроек ТОЛЬКО для Telegram WebApp"""
-    html = f"""
+    """Главная страница настроек"""
+    return """
     <!DOCTYPE html>
-    <html>
+    <html lang="ru">
     <head>
-        <title>Donk Chat Settings</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Настройки приложения</title>
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <style>
-            :root {{
-                --primary: #007aff;
-                --success: #34c759;
-                --danger: #ff3b30;
-                --bg: var(--tg-theme-bg-color, #ffffff);
-                --card-bg: var(--tg-theme-secondary-bg-color, #f2f2f7);
-                --text: var(--tg-theme-text-color, #000000);
-            }}
-            
-            * {{
+            * {
                 margin: 0;
                 padding: 0;
                 box-sizing: border-box;
-            }}
-            
-            body {{
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: var(--bg);
-                color: var(--text);
-                line-height: 1.6;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            }
+
+            body {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
                 padding: 20px;
-                max-width: 600px;
-                margin: 0 auto;
-            }}
-            
-            .header {{
-                text-align: center;
-                margin-bottom: 30px;
-                padding: 20px 0;
-            }}
-            
-            .header h1 {{
-                font-size: 28px;
-                font-weight: 700;
-                margin-bottom: 8px;
-            }}
-            
-            .header p {{
-                opacity: 0.7;
-                font-size: 16px;
-            }}
-            
-            .control-panel {{
-                background: var(--card-bg);
-                padding: 20px;
-                border-radius: 16px;
-                margin-bottom: 25px;
-                text-align: center;
-            }}
-            
-            .btn {{
-                background: var(--primary);
-                color: white;
-                border: none;
-                padding: 12px 20px;
-                margin: 5px;
-                border-radius: 10px;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: 600;
-                transition: all 0.2s;
-            }}
-            
-            .btn:hover {{
-                opacity: 0.9;
-                transform: translateY(-1px);
-            }}
-            
-            .btn-test {{
-                background: #ff9500;
-            }}
-            
-            .section {{
-                margin-bottom: 30px;
-            }}
-            
-            .section-title {{
-                font-size: 20px;
-                font-weight: 700;
-                margin-bottom: 20px;
-                padding-bottom: 10px;
-                border-bottom: 2px solid var(--primary);
                 display: flex;
+                justify-content: center;
                 align-items: center;
-                gap: 10px;
-            }}
-            
-            .setting {{
-                background: var(--card-bg);
-                padding: 20px;
-                margin: 15px 0;
-                border-radius: 14px;
-                transition: all 0.3s ease;
-            }}
-            
-            .setting:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            }}
-            
-            .setting-header {{
+            }
+
+            .container {
+                width: 100%;
+                max-width: 500px;
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 20px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+                overflow: hidden;
+            }
+
+            .header {
+                background: linear-gradient(90deg, #4f6df5, #3a56e8);
+                color: white;
+                padding: 25px 20px;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 24px;
+                font-weight: 600;
+                margin-bottom: 5px;
+            }
+
+            .header p {
+                opacity: 0.9;
+                font-size: 14px;
+            }
+
+            .settings-container {
+                padding: 25px 20px;
+            }
+
+            .setting-item {
+                margin-bottom: 30px;
+                padding-bottom: 25px;
+                border-bottom: 1px solid #f0f0f0;
+            }
+
+            .setting-item:last-child {
+                border-bottom: none;
+                margin-bottom: 0;
+                padding-bottom: 0;
+            }
+
+            .setting-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 8px;
-            }}
-            
-            .setting-title {{
+                margin-bottom: 15px;
+            }
+
+            .setting-title {
                 font-weight: 600;
-                font-size: 17px;
+                color: #333;
+                font-size: 16px;
+            }
+
+            .setting-value {
+                font-weight: 600;
+                color: #4f6df5;
+                font-size: 16px;
+            }
+
+            .slider-container {
+                position: relative;
+                height: 30px;
                 display: flex;
                 align-items: center;
-                gap: 10px;
-            }}
-            
-            .setting-description {{
-                opacity: 0.7;
+            }
+
+            .buttons {
+                display: flex;
+                gap: 15px;
+                margin-top: 30px;
+            }
+
+            .btn {
+                flex: 1;
+                padding: 15px;
+                border: none;
+                border-radius: 12px;
+                font-weight: 600;
+                font-size: 16px;
+                cursor: pointer;
+                transition: all 0.3s;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .btn-primary {
+                background: linear-gradient(90deg, #4f6df5, #3a56e8);
+                color: white;
+                box-shadow: 0 4px 12px rgba(79, 109, 245, 0.3);
+            }
+
+            .btn-primary:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 15px rgba(79, 109, 245, 0.4);
+            }
+
+            .btn-secondary {
+                background: #f5f5f5;
+                color: #666;
+            }
+
+            .btn-secondary:hover {
+                background: #e9e9e9;
+            }
+
+            .status {
+                text-align: center;
+                margin-top: 20px;
+                padding: 12px;
+                border-radius: 10px;
                 font-size: 14px;
-                margin-top: 5px;
-            }}
-            
+                display: none;
+            }
+
+            .status.success {
+                background: #e8f5e9;
+                color: #2e7d32;
+                display: block;
+            }
+
+            .status.error {
+                background: #ffebee;
+                color: #c62828;
+                display: block;
+            }
+
+            .icon {
+                width: 20px;
+                height: 20px;
+            }
+
             /* Switch styles */
-            .switch {{
+            .switch {
                 position: relative;
                 display: inline-block;
                 width: 54px;
                 height: 32px;
-            }}
-            
-            .switch input {{
+            }
+
+            .switch input {
                 opacity: 0;
                 width: 0;
                 height: 0;
-            }}
-            
-            .slider {{
+            }
+
+            .switch-slider {
                 position: absolute;
                 cursor: pointer;
                 top: 0;
@@ -292,9 +307,9 @@ def settings_page():
                 background-color: #ccc;
                 transition: .4s;
                 border-radius: 32px;
-            }}
-            
-            .slider:before {{
+            }
+
+            .switch-slider:before {
                 position: absolute;
                 content: "";
                 height: 26px;
@@ -304,511 +319,343 @@ def settings_page():
                 background-color: white;
                 transition: .4s;
                 border-radius: 50%;
-            }}
-            
-            input:checked + .slider {{
-                background-color: var(--success);
-            }}
-            
-            input:checked + .slider:before {{
+            }
+
+            input:checked + .switch-slider {
+                background-color: #4f6df5;
+            }
+
+            input:checked + .switch-slider:before {
                 transform: translateX(22px);
-            }}
-            
-            /* Status message */
-            .status {{
-                position: fixed;
-                bottom: 20px;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 90%;
-                max-width: 500px;
-                padding: 16px 20px;
-                border-radius: 12px;
-                text-align: center;
-                font-weight: 600;
-                z-index: 1000;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-                display: none;
-                animation: slideUp 0.3s ease-out;
-                backdrop-filter: blur(10px);
-            }}
-            
-            @keyframes slideUp {{
-                from {{
-                    opacity: 0;
-                    transform: translateX(-50%) translateY(20px);
-                }}
-                to {{
-                    opacity: 1;
-                    transform: translateX(-50%) translateY(0);
-                }}
-            }}
-            
-            .status.success {{
-                background: rgba(52, 199, 89, 0.95);
-                color: white;
-            }}
-            
-            .status.error {{
-                background: rgba(255, 59, 48, 0.95);
-                color: white;
-            }}
-            
-            .status.warning {{
-                background: rgba(255, 149, 0, 0.95);
-                color: white;
-            }}
-            
-            .status.info {{
-                background: rgba(0, 122, 255, 0.95);
-                color: white;
-            }}
-            
-            .emoji {{
-                font-size: 20px;
-            }}
-            
-            .access-denied {{
-                text-align: center;
-                padding: 40px 20px;
-                color: #ff3b30;
-            }}
+            }
         </style>
     </head>
     <body>
-        <div id="app-content">
+        <div class="container">
             <div class="header">
-                <h1>⚙️ Donk Chat Settings</h1>
-                <p>Управление разрешениями группы</p>
+                <h1>Настройки группы</h1>
+                <p>Управление разрешениями чата</p>
             </div>
             
-            <div class="control-panel">
-                <button class="btn" onclick="syncSettings()">🔄 Синхронизировать</button>
-                <button class="btn" onclick="applyAllSettings()">🎯 Применить все</button>
-            </div>
-
-            <div id="status" class="status"></div>
-
-            <!-- Основные разрешения -->
-            <div class="section">
-                <div class="section-title">
-                    <span class="emoji">💬</span>
-                    Основные разрешения
+            <div class="settings-container">
+                <div class="setting-item">
+                    <div class="setting-header">
+                        <span class="setting-title">💬 Отправка сообщений</span>
+                        <span class="setting-value" id="messages_status">ON</span>
+                    </div>
+                    <div class="slider-container">
+                        <label class="switch">
+                            <input type="checkbox" id="can_send_messages" onchange="toggleSetting('can_send_messages', this.checked, 'messages_status')">
+                            <span class="switch-slider"></span>
+                        </label>
+                    </div>
                 </div>
                 
-                <div class="setting">
+                <div class="setting-item">
                     <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">💬</span>
-                            Отправка сообщений
-                        </div>
+                        <span class="setting-title">🖼️ Отправка медиа</span>
+                        <span class="setting-value" id="media_status">ON</span>
+                    </div>
+                    <div class="slider-container">
                         <label class="switch">
-                            <input type="checkbox" id="can_send_messages" onchange="toggleSetting('can_send_messages', this.checked)">
-                            <span class="slider"></span>
+                            <input type="checkbox" id="can_send_media_messages" onchange="toggleSetting('can_send_media_messages', this.checked, 'media_status')">
+                            <span class="switch-slider"></span>
                         </label>
                     </div>
-                    <div class="setting-description">Участники могут отправлять текстовые сообщения</div>
-                </div>
-
-                <div class="setting">
-                    <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">📊</span>
-                            Создание опросов
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="can_send_polls" onchange="toggleSetting('can_send_polls', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-description">Участники могут создавать опросы и викторины</div>
-                </div>
-            </div>
-
-            <!-- Медиафайлы -->
-            <div class="section">
-                <div class="section-title">
-                    <span class="emoji">🖼️</span>
-                    Медиафайлы
                 </div>
                 
-                <div class="setting">
+                <div class="setting-item">
                     <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">🖼️</span>
-                            Все медиа
-                        </div>
+                        <span class="setting-title">📊 Создание опросов</span>
+                        <span class="setting-value" id="polls_status">ON</span>
+                    </div>
+                    <div class="slider-container">
                         <label class="switch">
-                            <input type="checkbox" id="can_send_media_messages" onchange="toggleSetting('can_send_media_messages', this.checked)">
-                            <span class="slider"></span>
+                            <input type="checkbox" id="can_send_polls" onchange="toggleSetting('can_send_polls', this.checked, 'polls_status')">
+                            <span class="switch-slider"></span>
                         </label>
                     </div>
-                    <div class="setting-description">Все типы медиафайлов (общая настройка)</div>
                 </div>
 
-                <div class="setting">
+                <div class="setting-item">
                     <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">📸</span>
-                            Фотографии
-                        </div>
+                        <span class="setting-title">✏️ Изменение информации</span>
+                        <span class="setting-value" id="info_status">OFF</span>
+                    </div>
+                    <div class="slider-container">
                         <label class="switch">
-                            <input type="checkbox" id="can_send_photos" onchange="toggleSetting('can_send_photos', this.checked)">
-                            <span class="slider"></span>
+                            <input type="checkbox" id="can_change_info" onchange="toggleSetting('can_change_info', this.checked, 'info_status')">
+                            <span class="switch-slider"></span>
                         </label>
                     </div>
-                    <div class="setting-description">Отправка изображений и фотографий</div>
                 </div>
 
-                <div class="setting">
+                <div class="setting-item">
                     <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">🎥</span>
-                            Видео
-                        </div>
+                        <span class="setting-title">👥 Приглашение пользователей</span>
+                        <span class="setting-value" id="invite_status">ON</span>
+                    </div>
+                    <div class="slider-container">
                         <label class="switch">
-                            <input type="checkbox" id="can_send_videos" onchange="toggleSetting('can_send_videos', this.checked)">
-                            <span class="slider"></span>
+                            <input type="checkbox" id="can_invite_users" onchange="toggleSetting('can_invite_users', this.checked, 'invite_status')">
+                            <span class="switch-slider"></span>
                         </label>
                     </div>
-                    <div class="setting-description">Отправка видеофайлов</div>
                 </div>
 
-                <div class="setting">
+                <div class="setting-item">
                     <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">📹</span>
-                            Видеосообщения
-                        </div>
+                        <span class="setting-title">📌 Закрепление сообщений</span>
+                        <span class="setting-value" id="pin_status">OFF</span>
+                    </div>
+                    <div class="slider-container">
                         <label class="switch">
-                            <input type="checkbox" id="can_send_video_notes" onchange="toggleSetting('can_send_video_notes', this.checked)">
-                            <span class="slider"></span>
+                            <input type="checkbox" id="can_pin_messages" onchange="toggleSetting('can_pin_messages', this.checked, 'pin_status')">
+                            <span class="switch-slider"></span>
                         </label>
                     </div>
-                    <div class="setting-description">Круглые видео-сообщения (video notes)</div>
-                </div>
-
-                <div class="setting">
-                    <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">🎤</span>
-                            Голосовые сообщения
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="can_send_voice_notes" onchange="toggleSetting('can_send_voice_notes', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-description">Отправка голосовых сообщений (войсы)</div>
-                </div>
-
-                <div class="setting">
-                    <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">🩷</span>
-                            Стикеры и GIF
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="can_send_stickers" onchange="toggleSetting('can_send_stickers', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-description">Отправка стикеров и анимированных GIF</div>
-                </div>
-            </div>
-
-            <!-- Управление группой -->
-            <div class="section">
-                <div class="section-title">
-                    <span class="emoji">👥</span>
-                    Управление группой
                 </div>
                 
-                <div class="setting">
-                    <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">✏️</span>
-                            Изменение информации
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="can_change_info" onchange="toggleSetting('can_change_info', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-description">Изменение названия, фото и описания группы</div>
+                <div class="buttons">
+                    <button class="btn btn-secondary" onclick="syncSettings()">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 4V5H4.58152M19.9381 11C19.446 7.05369 16.0796 4 12 4C8.64262 4 5.76829 6.06817 4.58152 9M4.58152 9H4M4.58152 9H6M20 20V19H19.4185M19.4185 19C18.2317 21.9318 15.3574 24 12 24C7.92038 24 4.55399 20.9463 4.06189 17M19.4185 19H18M19.4185 19H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Синхронизировать
+                    </button>
+                    <button class="btn btn-primary" onclick="applyAllSettings()">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M5 13L9 17L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Применить все
+                    </button>
                 </div>
 
-                <div class="setting">
-                    <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">👥</span>
-                            Приглашение пользователей
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="can_invite_users" onchange="toggleSetting('can_invite_users', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-description">Участники могут приглашать новых пользователей</div>
-                </div>
-
-                <div class="setting">
-                    <div class="setting-header">
-                        <div class="setting-title">
-                            <span class="emoji">📌</span>
-                            Закрепление сообщений
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="can_pin_messages" onchange="toggleSetting('can_pin_messages', this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-description">Участники могут закреплять сообщения</div>
-                </div>
+                <div id="status" class="status"></div>
             </div>
-        </div>
-
-        <div id="access-denied" class="access-denied" style="display: none;">
-            <h2>🚫 Доступ запрещен</h2>
-            <p>Этот интерфейс работает только через Telegram</p>
-            <p>Откройте через бота командой /settings</p>
         </div>
 
         <script>
-            let tg = window.Telegram.WebApp;
-            let currentSettings = {json.dumps(current_settings)};
-            
-            // Проверяем, открыто ли в Telegram WebApp
-            function checkTelegramEnvironment() {{
-                if (typeof tg === 'undefined' || !tg.initData) {{
-                    document.getElementById('app-content').style.display = 'none';
-                    document.getElementById('access-denied').style.display = 'block';
-                    return false;
-                }}
-                
-                // Расширяем на весь экран
-                tg.expand();
-                tg.ready();
-                return true;
-            }}
-            
-            // Инициализация интерфейса
-            function initializeUI() {{
-                updateUI(currentSettings);
-                showStatus('🎯 Donk Chat Settings загружены!', 'info');
-            }}
-            
-            // Обновление UI на основе текущих настроек
-            function updateUI(settings) {{
-                console.log('Updating UI with settings:', settings);
-                
-                // Основные разрешения
+            // Текущие настройки
+            let currentSettings = {};
+
+            // Загружаем настройки при загрузке страницы
+            document.addEventListener('DOMContentLoaded', function() {
+                loadSettings();
+            });
+
+            function loadSettings() {
+                fetch('/api/settings')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(settings => {
+                        currentSettings = settings;
+                        updateUI(settings);
+                        showStatus('✅ Настройки загружены', 'success');
+                    })
+                    .catch(error => {
+                        console.error('Error loading settings:', error);
+                        showStatus('❌ Ошибка загрузки настроек', 'error');
+                    });
+            }
+
+            function updateUI(settings) {
+                // Обновляем переключатели
                 document.getElementById('can_send_messages').checked = settings.can_send_messages;
-                document.getElementById('can_send_polls').checked = settings.can_send_polls;
-                
-                // Медиафайлы
                 document.getElementById('can_send_media_messages').checked = settings.can_send_media_messages;
-                document.getElementById('can_send_photos').checked = settings.can_send_photos;
-                document.getElementById('can_send_videos').checked = settings.can_send_videos;
-                document.getElementById('can_send_video_notes').checked = settings.can_send_video_notes;
-                document.getElementById('can_send_voice_notes').checked = settings.can_send_voice_notes;
-                document.getElementById('can_send_stickers').checked = settings.can_send_stickers;
-                
-                // Управление группой
+                document.getElementById('can_send_polls').checked = settings.can_send_polls;
                 document.getElementById('can_change_info').checked = settings.can_change_info;
                 document.getElementById('can_invite_users').checked = settings.can_invite_users;
                 document.getElementById('can_pin_messages').checked = settings.can_pin_messages;
-            }}
-            
-            // Инициализация при загрузке
-            if (checkTelegramEnvironment()) {{
-                initializeUI();
-            }}
+                
+                // Обновляем статусы
+                document.getElementById('messages_status').textContent = settings.can_send_messages ? 'ON' : 'OFF';
+                document.getElementById('media_status').textContent = settings.can_send_media_messages ? 'ON' : 'OFF';
+                document.getElementById('polls_status').textContent = settings.can_send_polls ? 'ON' : 'OFF';
+                document.getElementById('info_status').textContent = settings.can_change_info ? 'ON' : 'OFF';
+                document.getElementById('invite_status').textContent = settings.can_invite_users ? 'ON' : 'OFF';
+                document.getElementById('pin_status').textContent = settings.can_pin_messages ? 'ON' : 'OFF';
+            }
 
-            function toggleSetting(setting, value) {{
-                showStatus('🔄 Изменение настроек...', 'info');
+            function toggleSetting(setting, value, statusElement) {
+                showStatus('🔄 Изменение настроек...', 'success');
                 
-                // Обновляем локально сразу для отзывчивости
-                currentSettings[setting] = value;
-                
-                const data = {{
-                    action: 'update_setting',
-                    setting: setting,
-                    value: value,
-                    chat_id: {GROUP_CHAT_ID},
-                    timestamp: Date.now()
-                }};
-                
-                tg.sendData(JSON.stringify(data));
-                
-                // Показываем успех через 1 секунду (предполагая успех)
-                setTimeout(() => {{
-                    showStatus('✅ Настройка применена', 'success');
-                }}, 1000);
-            }}
+                fetch('/api/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        setting: setting,
+                        value: value
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(result => {
+                    if (result.success) {
+                        currentSettings = result.settings;
+                        updateUI(currentSettings);
+                        showStatus('✅ Настройка применена!', 'success');
+                    } else {
+                        showStatus('❌ Ошибка: ' + result.error, 'error');
+                        // Возвращаем переключатель в предыдущее состояние
+                        document.getElementById(setting).checked = !value;
+                        document.getElementById(statusElement).textContent = !value ? 'ON' : 'OFF';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating setting:', error);
+                    showStatus('❌ Ошибка сети', 'error');
+                    // Возвращаем переключатель в предыдущее состояние
+                    document.getElementById(setting).checked = !value;
+                    document.getElementById(statusElement).textContent = !value ? 'ON' : 'OFF';
+                });
+            }
 
-            function syncSettings() {{
-                showStatus('🔄 Синхронизация с Telegram...', 'info');
+            function syncSettings() {
+                showStatus('🔄 Синхронизация с Telegram...', 'success');
                 
-                const data = {{
-                    action: 'sync_settings',
-                    chat_id: {GROUP_CHAT_ID},
-                    timestamp: Date.now()
-                }};
-                
-                tg.sendData(JSON.stringify(data));
-                
-                // Обновляем UI через 2 секунды
-                setTimeout(() => {{
-                    // Запрашиваем актуальные настройки
-                    const getData = {{
-                        action: 'get_current_settings', 
-                        chat_id: {GROUP_CHAT_ID},
-                        timestamp: Date.now()
-                    }};
-                    tg.sendData(JSON.stringify(getData));
-                    showStatus('✅ Синхронизировано', 'success');
-                }}, 2000);
-            }}
+                fetch('/api/sync')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(result => {
+                        if (result.success) {
+                            currentSettings = result.settings;
+                            updateUI(currentSettings);
+                            showStatus('✅ Настройки синхронизированы!', 'success');
+                        } else {
+                            showStatus('❌ Ошибка синхронизации', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error syncing settings:', error);
+                        showStatus('❌ Ошибка сети при синхронизации', 'error');
+                    });
+            }
 
-            function applyAllSettings() {{
-                showStatus('🎯 Применение всех настроек...', 'info');
+            function applyAllSettings() {
+                showStatus('🎯 Применение всех настроек...', 'success');
                 
-                const data = {{
-                    action: 'apply_settings',
-                    chat_id: {GROUP_CHAT_ID},
-                    timestamp: Date.now()
-                }};
-                
-                tg.sendData(JSON.stringify(data));
-                
-                setTimeout(() => {{
-                    showStatus('✅ Все настройки применены', 'success');
-                }}, 1000);
-            }}
+                fetch('/api/apply')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(result => {
+                        if (result.success) {
+                            showStatus('✅ Все настройки применены!', 'success');
+                        } else {
+                            showStatus('❌ Ошибка применения настроек', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error applying settings:', error);
+                        showStatus('❌ Ошибка сети', 'error');
+                    });
+            }
 
-            function showStatus(message, type) {{
+            function showStatus(message, type) {
                 const status = document.getElementById('status');
                 status.textContent = message;
                 status.className = 'status ' + type;
                 status.style.display = 'block';
                 
-                setTimeout(() => {{
+                setTimeout(() => {
                     status.style.display = 'none';
-                }}, 3000);
-            }}
+                }, 3000);
+            }
 
-            // Обработчик данных от бота
-            tg.onEvent('webAppDataReceived', function(event) {{
-                console.log('Data received from bot:', event);
-                // Здесь можно обработать ответы от бота если нужно
-            }});
-
-            // Обработчик сообщений от бота через основной обработчик
-            window.addEventListener('message', function(event) {{
-                if (event.data && event.data.type === 'settings_update') {{
-                    currentSettings = event.data.settings;
-                    updateUI(currentSettings);
-                    showStatus('🔄 Настройки обновлены', 'info');
-                }}
-            }});
+            // Инициализация Telegram Web App
+            if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+                Telegram.WebApp.ready();
+                Telegram.WebApp.expand();
+            }
         </script>
     </body>
     </html>
     """
-    return html
 
-# Webhook для обработки данных от WebApp
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    if not BOT_TOKEN:
-        return 'OK'
-    
-    try:
-        data = request.get_json()
-        print(f"📨 Received: {data}")
-        
-        # Обрабатываем сообщения от бота
-        if 'message' in data:
-            message = data['message']
-            user_id = message['from']['id']
-            
-            # Проверяем доступ
-            if user_id not in ALLOWED_USER_IDS:
-                return 'OK'
-            
-            # Обрабатываем команды
-            if 'text' in message:
-                text = message['text']
-                
-                if text == '/start' or text == '/settings':
-                    webapp_url = f"https://{request.host}/settings"
-                    telegram_api('sendMessage', {
-                        'chat_id': message['chat']['id'],
-                        'text': '🎛️ Donk Chat Settings',
-                        'reply_markup': {
-                            'inline_keyboard': [[{
-                                'text': '⚙️ Open Settings',
-                                'web_app': {'url': webapp_url}
-                            }]]
-                        }
-                    })
-        
-        # Обрабатываем данные от WebApp
-        elif 'web_app_data' in data:
-            web_app_data = data['web_app_data']
-            user_id = data['from']['id']
-            
-            if user_id not in ALLOWED_USER_IDS:
-                return 'OK'
-            
-            try:
-                app_data = json.loads(web_app_data['data'])
-                action = app_data.get('action')
-                chat_id = app_data.get('chat_id', GROUP_CHAT_ID)
-                
-                print(f"🔄 WebApp Action: {action}")
-                
-                if action == 'get_current_settings':
-                    # Просто логируем - настройки уже в интерфейсе
-                    print(f"📊 Current settings requested: {current_settings}")
-                    
-                elif action == 'update_setting':
-                    setting = app_data.get('setting')
-                    value = app_data.get('value')
-                    
-                    if setting in current_settings:
-                        result = update_setting(setting, value)
-                        # Не отправляем сообщение - только логируем
-                        print(f"✅ Setting updated: {setting} = {value}, Result: {result.get('ok')}")
-                        
-                elif action == 'sync_settings':
-                    success = sync_settings()
-                    print(f"🔄 Settings synced: {success}")
-                    
-                elif action == 'apply_settings':
-                    result = apply_settings()
-                    print(f"🎯 Settings applied: {result.get('ok')}")
-                    
-            except Exception as e:
-                print(f"❌ WebApp data error: {e}")
-    
-    except Exception as e:
-        print(f"❌ Webhook error: {e}")
-    
-    return 'OK'
-
-# Новый endpoint для получения текущих настроек
-@app.route('/api/settings', methods=['GET'])
-def get_settings_api():
-    """API для получения текущих настроек"""
+# API endpoints
+@app.route('/api/settings')
+def api_get_settings():
+    """Возвращает текущие настройки"""
     return jsonify(current_settings)
 
+@app.route('/api/update', methods=['POST'])
+def api_update_setting():
+    """Обновляет одну настройку"""
+    try:
+        data = request.get_json()
+        setting = data.get('setting')
+        value = data.get('value')
+        
+        if setting not in current_settings:
+            return jsonify({'success': False, 'error': 'Invalid setting'})
+        
+        result = update_setting(setting, value)
+        
+        if result.get('ok'):
+            return jsonify({
+                'success': True, 
+                'settings': current_settings,
+                'message': f'{setting} set to {value}'
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'error': 'Telegram API error',
+                'settings': current_settings
+            })
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/sync')
+def api_sync_settings():
+    """Синхронизирует настройки с Telegram"""
+    try:
+        success = sync_settings()
+        return jsonify({
+            'success': success,
+            'settings': current_settings,
+            'message': 'Settings synced' if success else 'Sync failed'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/apply')
+def api_apply_settings():
+    """Применяет все текущие настройки"""
+    try:
+        result = apply_settings()
+        return jsonify({
+            'success': result.get('ok', False),
+            'settings': current_settings,
+            'message': 'Settings applied' if result.get('ok') else 'Apply failed'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
-    print("🚀 Starting Telegram-Only Settings Manager")
+    print("🚀 Starting Group Settings Manager")
     print(f"🎯 Group: {GROUP_CHAT_ID}")
     print(f"👥 Allowed users: {ALLOWED_USER_IDS}")
-    print("🔒 RESTRICTED: Only works through Telegram WebApp")
+    print(f"📊 Initial settings: {current_settings}")
     
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
